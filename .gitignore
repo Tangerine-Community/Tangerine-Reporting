@@ -7,11 +7,15 @@ lib-cov
 *.pid
 *.gz
 *.swp
+*.xlsx
+*.csv
+*.xls
 
 pids
 logs
 results
 tmp
+dist
 
 # Dependency directory
 node_modules

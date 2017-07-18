@@ -1,6 +1,7 @@
 /**
  * Module dependencies.
  */
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const logger = require('morgan');
@@ -8,32 +9,12 @@ const chalk = require('chalk');
 const errorHandler = require('errorhandler');
 const _ = require('lodash');
 const Promise = require('bluebird');
-
-/**
- * Controllers (route handlers).
- */
-const assessmentController = require('./controllers/assessment');
+const Excel = require('exceljs');
 
 /**
  * Create Express server.
  */
 const app = express();
-
-
-/**
- * Connect to nanoDB.
- */
-const nano = require('nano');
-
-// Using nano-promises library
-// const prom = require('nano-promises');
-// const TMP_TANGERINEDB = prom(nano('http://localhost:5984')).use('tmp_tangerine');
-
-// Using nano only
-const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
-// const TMP_TANGERINEDB = nano('http://localhost:5984').use('tmp_tangerine');
-// Promise.promisifyAll(TMP_TANGERINEDB);
-
 
 /**
  * Express configuration.
@@ -44,44 +25,24 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
 /**
- * API routes.
+ * Controllers (route handlers).
  */
+const assessmentController = require('./controllers/assessment');
+
+/**
+ * Primary app routes
+ */
+
 app.get('/', function(req, res) {
-  var columnData;
-  var allDB = [];
-  let columnHeaders;
-
-  // get a specific document
-  // TMP_TANGERINEDB
-  //  .get('0095F1B5-7A1D-7B1F-AC59-D2AF2FC05BFD', (err, body) => {
-  //     if (err) {
-  //        res.send(err);
-  //     }
-  //    columnHeaders = _.keysIn(body);
-  //    columnData = body;
-  //    res.json({ columnHeaders, columnData })
-  // });
-
-  TMP_TANGERINEDB.list({ include_docs: true }, (err, body) => {
-      if (err) return res.send(err);
-
-      // Get a single result collection document
-      let first  = _.find(body.rows, (data) => { return data.doc.collection === 'result'; });
-
-      // Get the keys for a result document. To be used as excel column headers
-      columnHeaders = _.keysIn(first.doc);
-
-      // Get all collections that are result
-      let resultCollections = _.filter(body.rows, (data) => data.doc.collection === 'result');
-
-      // Return just 10 documents of the data
-      res.json({ columnHeaders, results: resultCollections.slice(90, 100) })
-    })
-
-
+  res.send('\n Welcome to Tangerine Reporting Service ');
 });
 
-app.get('/api/v1/assessment', assessmentController.get);
+app.get('/assessment', assessmentController.getAll);
+app.get('/assessment/:id', assessmentController.getAssessment);
+app.get('/assessment/results', assessmentController.getResults);
+app.get('/assessment/questions', assessmentController.getQuestions);
+app.get('/assessment/subtests', assessmentController.getSubtests);
+
 
 /**
  * Error Handler.
