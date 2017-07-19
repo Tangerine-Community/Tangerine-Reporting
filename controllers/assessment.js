@@ -19,25 +19,35 @@ let subtestCollections, questionCollections, assessmentCollections, allCollectio
 /*
  * Creates headers for CSV columns
 */
-function generateColumnHeaders (data) {
-  let ans = [];
-  _.forEach(data, (values) => {
-    let keys =_.keysIn(values.doc);
-    _.forEach(keys, (val) => {
-      ans.push(val);
+function createHeaders (data) {
+  let questionHeaders = [];
+  _.forEach(data, (subData) => {
+    _.forEach(subData.doc, (val, key, doc) => {
+      if (typeof val === 'object') {
+        if (doc.collection === 'question') {
+          _.forEach(val, (item) => {
+            questionHeaders.push(item.label);
+          });
+          return;
+        }
+        questionHeaders.push(key);
+        return;
+      }
+      questionHeaders.push(key);
     });
   });
-  return _.uniq(ans);
+  return _.uniq(questionHeaders);
 }
 
 /*
  *  Creates column settings for CSV generation
 */
-function genereateColumnSettings (doc) {
+function generateColumnSettings (doc) {
   return _.map(doc, (data) => {
     return { header: data.toUpperCase(), key: data }
   });
 }
+
 
 /**
  * GET /assessnent
@@ -47,18 +57,19 @@ exports.getAll = (req, res) => {
   // TODO: Promisify these queries
   TMP_TANGERINEDB.view('ojai', 'subtestsByAssessmentId', { include_docs: true }, (err, body) => {
     if (err) return res.send(err);
-    subtestCollections = _.clone(body.rows);
+    let subtest = createHeaders(body.rows);
 
     TMP_TANGERINEDB.view('ojai', 'questionsByParentId', { include_docs: true }, (err, body) => {
       if (err) return res.send(err);
-      questionCollections = _.clone(body.rows);
+      let question = createHeaders(body.rows)
 
       TMP_TANGERINEDB.view('ojai', 'byCollection', { key: 'assessment', include_docs: true }, (err, body) => {
         if (err) return res.send(err);
-        assessmentCollections = _.clone(body.rows);
-        allCollections = subtestCollections.concat(questionCollections).concat(assessmentCollections);
-        let colHeaders = generateColumnHeaders(allCollections);
-        let colSettings = genereateColumnSettings(colHeaders);
+        let assessment = createHeaders(body.rows)
+
+        let colHeaders = subtest.concat(question).concat(assessment);
+        colHeaders = _.uniq(colHeaders);
+        let colSettings = generateColumnSettings(colHeaders);
 
         res.json({ colHeaders, colSettings });
       });
