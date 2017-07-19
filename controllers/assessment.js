@@ -11,91 +11,60 @@ const Excel = require('exceljs');
 const nano = require('nano');
 const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
 
+/*
+ *  Define variables for column headers
+*/
+let subtestCollections, questionCollections, assessmentCollections, allCollections;
+
+/*
+ * Creates headers for CSV columns
+*/
+function generateColumnHeaders (data) {
+  let ans = [];
+  _.forEach(data, (values) => {
+    let keys =_.keysIn(values.doc);
+    _.forEach(keys, (val) => {
+      ans.push(val);
+    });
+  });
+  return _.uniq(ans);
+}
+
+/*
+ *  Creates column settings for CSV generation
+*/
+function genereateColumnSettings (doc) {
+  return _.map(doc, (data) => {
+    return { header: data.toUpperCase(), key: data }
+  });
+}
+
 /**
  * GET /assessnent
  * Retrieve all assessments
  */
 exports.getAll = (req, res) => {
-  TMP_TANGERINEDB.list({ include_docs: true }, (err, body) => {
+  // TODO: Promisify these queries
+  TMP_TANGERINEDB.view('ojai', 'subtestsByAssessmentId', { include_docs: true }, (err, body) => {
     if (err) return res.send(err);
+    subtestCollections = _.clone(body.rows);
 
-    let allData = _.clone(body.rows);
-    allData = _.filter(allData, (data) => data.doc.collection === 'result');
-    allData = allData.slice(0, 10);
-    let simpleHeaders = [];
-    let deepHeaders = [];
-    let subtest = [];
-    let question = [];
-    let datetimeCount = 0;
-    let datetimeSuffix;
+    TMP_TANGERINEDB.view('ojai', 'questionsByParentId', { include_docs: true }, (err, body) => {
+      if (err) return res.send(err);
+      questionCollections = _.clone(body.rows);
 
-    _.forEach(allData, function(data) {
-      _.filter(data.doc, function(item, index) {
-        if (typeof item ===  'object') {
-          // console.log(index);
-          if (index === 'device') {
-            let deviceKey = Object.keys(item)[0];
-            deepHeaders.push({ header: deviceKey, key: deviceKey });
-          }
-          if (index === 'order_map') {
-            deepHeaders.push({ header: index, key: index });
-          }
-          if (index === 'subtestData') {
-            _.forEach(item, (subData, key) => {
-              if (subData.prototype === 'location') {
-                _.forEach(subData.data.labels, (subItem) => {
-                  deepHeaders.push({ header: subItem, key: subItem });
-                });
-                return;
-              }
-              if (subData.prototype === 'datetime') {
-                datetimeSuffix = datetimeCount > 0 ? '_' + datetimeCount : '';
-                // let datetimeKey = datetimeCount > 0 ? dateIndex + datetimeSuffix : dateIndex;
-                _.forEach(subData.data, (dateData, dateIndex) => {
-                  deepHeaders.push({ header: dateIndex + datetimeSuffix, key: dateIndex + datetimeSuffix });
-                });
-                datetimeCount++;
-                return;
-              }
-              if (subData.prototype === 'survey') {
-                _.forEach(subData.data, (surveyItem, surveryKey) => {
-                  deepHeaders.push({ header: surveryKey, key: surveryKey });
-                });
-                return;
-              }
-              if (subData.prototype === 'grid') {
-                _.forEach(subData.data, (gridData, gridKey) => {
-                  if (gridKey !== 'items') {
-                    deepHeaders.push({ header: gridKey, key: gridKey });
-                  } else {
+      TMP_TANGERINEDB.view('ojai', 'byCollection', { key: 'assessment', include_docs: true }, (err, body) => {
+        if (err) return res.send(err);
+        assessmentCollections = _.clone(body.rows);
+        allCollections = subtestCollections.concat(questionCollections).concat(assessmentCollections);
+        let colHeaders = generateColumnHeaders(allCollections);
+        let colSettings = genereateColumnSettings(colHeaders);
 
-                  }
-                });
-              }
-              if (subData.prototype === 'complete') {
-                _.forEach(subData.data, (completeData, completeKey) => {
-                  deepHeaders.push({ header: completeKey, key: completeKey });
-                });
-                return;
-              }
-            });
-          }
-        }
-        else {
-          simpleHeaders.push({ header: index, key: index });
-        }
-      })
-    })
-    simpleHeaders = _.uniqWith(simpleHeaders, _.isEqual);
-    deepHeaders = _.uniqWith(deepHeaders, _.isEqual);
-
-    res.json({ subtest, simpleHeaders, deepHeaders });
+        res.json({ colHeaders, colSettings });
+      });
+    });
   });
-  // TMP_TANGERINEDB.list({ include_docs: true }, (err, body) => {
-  //   if (err) return res.send(err);
 
-  //   res.json({ length: body.rows.length, doc: body.rows.slice(0, 2) });
-  // });
 }
 
 /**
@@ -152,6 +121,9 @@ exports.getSubtests = (req, res) => {
 }
 
 
+/*
+ *Ignore these functions below
+*/
 function generateCSV () {
 
   var columnData;
@@ -218,3 +190,69 @@ function generateCSV () {
   })
 
 }
+
+
+function getResultCollection() {
+  _.forEach(allData, function(data) {
+    _.filter(data.doc, function(item, index) {
+      if (typeof item ===  'object') {
+        // console.log(index);
+        if (index === 'device') {
+          let deviceKey = Object.keys(item)[0];
+          deepHeaders.push({ header: deviceKey, key: deviceKey });
+        }
+        if (index === 'order_map') {
+          deepHeaders.push({ header: index, key: index });
+        }
+        if (index === 'subtestData') {
+          _.forEach(item, (subData, key) => {
+            if (subData.prototype === 'location') {
+              _.forEach(subData.data.labels, (subItem) => {
+                deepHeaders.push({ header: subItem, key: subItem });
+              });
+              return;
+            }
+            if (subData.prototype === 'datetime') {
+              datetimeSuffix = datetimeCount > 0 ? '_' + datetimeCount : '';
+              // let datetimeKey = datetimeCount > 0 ? dateIndex + datetimeSuffix : dateIndex;
+              _.forEach(subData.data, (dateData, dateIndex) => {
+                deepHeaders.push({ header: dateIndex + datetimeSuffix, key: dateIndex + datetimeSuffix });
+              });
+              datetimeCount++;
+              return;
+            }
+            if (subData.prototype === 'survey') {
+              _.forEach(subData.data, (surveyItem, surveryKey) => {
+                deepHeaders.push({ header: surveryKey, key: surveryKey });
+              });
+              return;
+            }
+            if (subData.prototype === 'grid') {
+              _.forEach(subData.data, (gridData, gridKey) => {
+                if (gridKey !== 'items') {
+                  deepHeaders.push({ header: gridKey, key: gridKey });
+                } else {
+
+                }
+              });
+            }
+            if (subData.prototype === 'complete') {
+              _.forEach(subData.data, (completeData, completeKey) => {
+                deepHeaders.push({ header: completeKey, key: completeKey });
+              });
+              return;
+            }
+          });
+        }
+      }
+      else {
+        simpleHeaders.push({ header: index, key: index });
+      }
+    })
+  })
+  simpleHeaders = _.uniqWith(simpleHeaders, _.isEqual);
+  deepHeaders = _.uniqWith(deepHeaders, _.isEqual);
+
+  res.json({ subtest, simpleHeaders, deepHeaders });
+}
+
