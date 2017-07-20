@@ -4,6 +4,7 @@
 
 const _ = require('lodash');
 const Excel = require('exceljs');
+const chalk = require('chalk');
 
 /**
  * Connect to Couch DB
@@ -11,14 +12,8 @@ const Excel = require('exceljs');
 const nano = require('nano');
 const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
 
-/*
- *  Define variables for column headers
-*/
-let subtestCollections, questionCollections, assessmentCollections, allCollections;
 
-/*
- * Creates headers for CSV columns
-*/
+// Creates headers for CSV columns
 function createHeaders (data) {
   let questionHeaders = [];
   _.forEach(data, (subData) => {
@@ -49,85 +44,108 @@ function generateColumnSettings (doc) {
 }
 
 
+
+/*
+
+result = {
+  subtestID: {
+    year: afsa,
+    month: afasd,
+    day: asfsad,
+    assesstime: adfsad
+  }
+}
+
+*/
+
+function processDatetimeResult (data) {
+  let all = [];
+  let ans = _.each(data.doc, (doc) => {
+    // suffix = datetimeCount > 0 ? '_' + datetimeCount : '';
+    // console.log('in here', datetimeCount, suffix);
+
+    // _.each(data.doc.substestData, (doc, ind) => {
+      // allDB.push({ header: `${arr[a]}-${String(a)}`, key: `arr[a]-${String(a)}` });
+      // allDB.push({ header: `${ind+suffix}`, key: `${ind+suffix}` });
+      let datetimeResult = {};
+      console.log(doc);
+      datetimeResult[doc.subtestId] = {
+        year : doc.data.year,
+        month: doc.data.month,
+        day: doc.data.day,
+        assess_time: doc.data.time
+      }
+
+      all.push(doc);
+    // });
+
+    // let data[subtestId] = {};
+  });
+
+  return all;
+}
+
 /**
  * GET /assessnent
  * Retrieve all assessments
  */
+
+let sampleData = [
+   {
+    "name": "Tanggal Penilaian ",
+    "data": {
+      "year": "2017",
+      "month": "apr",
+      "day": "4",
+      "time": "9:10"
+    },
+    "subtestHash": "QCAbEhoJSnCWrmClC2mwAD2Ziow=",
+    "subtestId": "074a96b6-8835-2e3c-6b41-e8a678d56987",
+    "prototype": "datetime",
+    "timestamp": 1491268239410
+  },
+  {
+    "name": "Tanggal Penilaian ",
+    "data": {
+      "year": "2017",
+      "month": "apr",
+      "day": "4",
+      "time": "9:10"
+    },
+    "subtestHash": "QCAbEhoJSnCWrmClC2mwAD2Ziow=",
+    "subtestId": "074a96b6-8835-2e3c-6b41-e8a678d56987",
+    "prototype": "datetime",
+    "timestamp": 1491268239410
+  }
+]
+
+function datetimeHeader (data) {
+  let datetimeCount = 0;
+  let suffix;
+  let allDB = [];
+  _.each(data, (doc) => {
+    suffix = datetimeCount > 0 ? '_' + datetimeCount : '';
+    allDB.push({ header: `year${suffix}`, key: `year${suffix}` });
+    allDB.push({ header: `month${suffix}`, key: `month${suffix}` });
+    allDB.push({ header: `day${suffix}`, key: `day${suffix}` });
+    allDB.push({ header: `assess_time${suffix}`, key: `assess_time${suffix}` });
+    datetimeCount++;
+  });
+  return allDB;
+}
+
 exports.getAll = (req, res) => {
   // TODO: Promisify these queries
-  TMP_TANGERINEDB.view('ojai', 'subtestsByAssessmentId', { include_docs: true }, (err, body) => {
-    if (err) return res.send(err);
-    let subtest = createHeaders(body.rows);
+  // let and =  datetimeHeader(sampleData);
+  //   res.json({ and });
 
-    TMP_TANGERINEDB.view('ojai', 'questionsByParentId', { include_docs: true }, (err, body) => {
-      if (err) return res.send(err);
-      let question = createHeaders(body.rows)
-
-      TMP_TANGERINEDB.view('ojai', 'byCollection', { key: 'assessment', include_docs: true }, (err, body) => {
-        if (err) return res.send(err);
-        let assessment = createHeaders(body.rows)
-
-        let colHeaders = subtest.concat(question).concat(assessment);
-        colHeaders = _.uniq(colHeaders);
-        let colSettings = generateColumnSettings(colHeaders);
-
-        res.json({ colHeaders, colSettings });
-      });
-    });
-  });
-
-}
-
-/**
- * GET /assessment/:id
- * Retrieve a single assessment doc
- */
-exports.getAssessment = (req, res) => {
-  TMP_TANGERINEDB.get(req.params.id, (err, body) => {
-    if (err) return res.send(err);
-    res.json(body)
-  });
-}
-
-/**
- * GET /assessment/results
- * Retrieve all result collection
- */
-exports.getResults = (req, res) => {
-  TMP_TANGERINEDB.list({ include_docs: true }, (err, body) => {
+  TMP_TANGERINEDB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
     if (err) return res.send(err);
 
-    let resultCollections = _.filter(body.rows, (data) => data.doc.collection === 'result');
+    let first = body.rows;
+    let result = datetimeHeader(first);
 
-    res.json({ length: resultCollections.length, results: resultCollections.slice(18, 20) });
-  });
-}
-
-/**
- * GET /assessment/questions
- * Retrieve all question collection
- */
-exports.getQuestions = (req, res) => {
-  TMP_TANGERINEDB.list({ include_docs: true }, (err, body) => {
-    if (err) return res.send(err);
-
-    let questionCollections = _.filter(body.rows, (data) => data.doc.collection === 'question' );
-
-    res.json({ length: questionCollections.length, results: questionCollections });
-  });
-}
-
-/**
- * GET /assessment/subtests
- * Retrieve all subtest collection
- */
-exports.getSubtests = (req, res) => {
-  TMP_TANGERINEDB.list({ include_docs: true }, (err, body) => {
-    if (err) return res.send(err);
-
-    let subtestCollections = _.filter(body.rows, (data) => data.doc.collection === 'subtest');
-
-    res.json({ length: subtestCollections.length, results: subtestCollections });
+    res.json({ result });
   });
 }
 
@@ -140,21 +158,6 @@ function generateCSV () {
   var columnData;
   var allDB = [];
   let columnHeaders;
-
-  // TODO: Remove this query
-  TMP_TANGERINEDB.list({ include_docs: true }, (err, body) => {
-    if (err) return res.send(err);
-
-    // Get a single result collection document
-    let first = _.find(body.rows, (data) => { return data.doc.collection === 'result'; });
-
-    // Get the keys for a result document. To be used as excel column headers
-    columnHeaders = _.keysIn(first.doc);
-    columnHeaders.shift();
-    columnHeaders.shift();
-
-    // Get all collections that are result
-    let resultCollections = _.filter(body.rows, (data) => data.doc.collection === 'result');
 
     let workbook = new Excel.Workbook();
     workbook.creator = 'Brockman';
@@ -172,20 +175,41 @@ function generateCSV () {
       visibility: 'visible'
     }];
 
-    let excelSheet = workbook.addWorksheet('Sample Sheet', {
+    let excelSheet = workbook.addWorksheet('Test Sheet', {
       views: [{ xSplit: 1 }],
       pageSetup: { paperSize: 9, orientation: 'landscape' }
     });
 
-    let columnSettings = _.map(columnHeaders, (col) => {
-      return { header: col.toUpperCase(), key: col }
+
+    let a = 0;
+    let columnSettings = _.each(body, (col, ind) => {
+      if (typeof col === 'object') {
+        let arr = _.keysIn(col);
+        while (a < arr.length) {
+          allDB.push({ header: `${arr[a]}-${String(a)}`, key: `arr[a]-${String(a)}` });
+          a++;
+        }
+        return;
+      }
+      allDB.push({ header: ind, key: ind });
     });
+    // console.log('sets:', columnSettings);
+    console.log('sets:', allDB);
+    // let ars = {
+    //   data: { yes: 'name' }
+    // };
+    // var sars = Object.keys(ars.data)[0];
 
-    excelSheet.columns = columnSettings;
-    let rowData = resultCollections.slice(0, 100);
+    excelSheet.columns = allDB;
+    // let rowData = resultCollections.slice(0, 100);
 
-    _.each(rowData, (data) => {
-      excelSheet.addRow(data.doc)
+    _.each(body, (doc, col) => {
+      if (typeof doc === 'object') {
+        excelSheet.addRow({key: 2, undefined: 'bill'})
+        return;
+      }
+      excelSheet.addRow({id: 2, undefined: 'bill'})
+      // console.log('ROW', excelSheet.getRow(2).values);
     });
 
     let creationTime = new Date().toISOString();
@@ -197,8 +221,8 @@ function generateCSV () {
       .catch((err) => console.error(err));
 
     // res.json({ columnsSettings });
-    res.json({ columnHeaders, results: resultCollections.slice(98, 100) });
-  })
+    // res.json({ columnHeaders, results: resultCollections.slice(98, 100) });
+  // })
 
 }
 

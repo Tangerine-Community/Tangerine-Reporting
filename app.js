@@ -38,10 +38,10 @@ app.get('/', function(req, res) {
 });
 
 app.get('/assessment', assessmentController.getAll);
-app.get('/assessment/:id', assessmentController.getAssessment);
-app.get('/assessment/results', assessmentController.getResults);
-app.get('/assessment/questions', assessmentController.getQuestions);
-app.get('/assessment/subtests', assessmentController.getSubtests);
+// app.get('/assessment/:id', assessmentController.getAssessment);
+// app.get('/assessment/results', assessmentController.getResults);
+// app.get('/assessment/questions', assessmentController.getQuestions);
+// app.get('/assessment/subtests', assessmentController.getSubtests);
 
 
 /**
