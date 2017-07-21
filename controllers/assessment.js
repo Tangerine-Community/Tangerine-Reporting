@@ -186,8 +186,8 @@ function processLocationResult(subData) {
  * return location header and location processed results
  */
 exports.getLocation = (req, res) => {
-  let locHeader = createIDHeader(dataID);
-  let locResult = processIDResult(dataID);
+  let locHeader = createSurveyHeader(surveyData);
+  let locResult = processSurveyResult(surveyData);
   res.json({ locHeader, locResult });
 }
 
@@ -253,10 +253,54 @@ function processIDResult(body) {
   return consentData;
 }
 
+/*
+ * PROTOTYPE = SURVEY
+ */
+let surveyData = {
+  "name": "Informasi Siswa",
+  "data": {
+    "stinfo1": "0",
+    "stinfo2": "0",
+    "stinfo3": "0",
+    "stinfo4": "1",
+    "stinfo5": "1",
+    "stinfo6": "1",
+    "stinfo7": "1",
+    "stinfo8": "1",
+    "stinfo9": "0"
+  },
+  "subtestHash": "9Buq5akfzWUKikYKiyrw5+dtF70=",
+  "subtestId": "862fa79a-4516-e190-5ee1-88bc42e2aeba",
+  "prototype": "survey",
+  "timestamp": 1491268446636
+};
+
+// Create header for survey prototype
+function createSurveyHeader(body) {
+  let survey = [];
+  _.forEach(body.data, (item, index) => {
+    survey.push({ header: index, key: index });
+  });
+  return survey;
+}
+
+// Generate result for survey prototype
+function processSurveyResult(body) {
+  let surveyResult = {};
+  let surveyData = {}
+
+  _.forEach(body.data, (val, ind) => {
+    surveyData[ind] = val;
+  });
+
+  surveyResult[body.subtestId] = surveyData;
+  return surveyResult;
+}
 
 /*
  * Ignore these functions below
- */
+*/
+
 function generateCSV() {
 
   var columnData;
