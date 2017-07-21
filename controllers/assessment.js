@@ -115,20 +115,17 @@ exports.getDatetime = (req, res) => {
   let result = createDatetimeHeader(sampleDatetimeData);
   let processed = processDatetimeResult(sampleDatetimeData);
 
-
-  // and insert a document in it
-  // RESULT_DB.insert({ resu, function(err, body, header) {
-  //   if (err) {
-  //     return;
-  //   }
-  //   console.log('you have inserted the rabbit.')
-  //   console.log(body);
-  // });
-
-  res.json({ result, processed });
+  // Insert processed results into a result_db
+  RESULT_DB.insert({ processed }, function(err, body, header) {
+    if (err) res.send(err);
+    res.json({ result, processed });
+  });
 }
 
 
+/*
+ * PROTOTYPE = LOCATION
+ */
 let sampleLocationData = {
   "name": "Lokasi Sekolah",
   "data": {
@@ -189,16 +186,14 @@ function processLocationResult(subData) {
  * return location header and location processed results
  */
 exports.getLocation = (req, res) => {
-  let locHeader = processConsentResult(consent);
-  // let locResult = processLocationResult(sampleLocationData);
-  let locResult = createConsentHeader(consent);
+  let locHeader = createIDHeader(dataID);
+  let locResult = processIDResult(dataID);
   res.json({ locHeader, locResult });
 }
 
 
 /*
  * PROTOTYPE = CONSENT
- *
  */
 let consent = {
   "name": "Persetujuan Verbal ",
@@ -213,14 +208,14 @@ let consent = {
 
 // Create header for consent prototype
 function createConsentHeader(body) {
-  let dataKey =  Object.keys(body.data);
-  return { header: 'Consent', key: dataKey[0] }
+  let dataKey = Object.keys(body.data);
+  return { header: dataKey[0], key: dataKey[0] }
 }
 
 // Generate result for consent prototype
 function processConsentResult(body) {
   let consentData = {};
-  let dataKey =  Object.keys(body.data);
+  let dataKey = Object.keys(body.data);
   consentData[body.subtestId] = {
     [dataKey[0]]: body.data.consent
   };
@@ -228,6 +223,35 @@ function processConsentResult(body) {
 }
 
 
+/*
+ * PROTOTYPE = ID
+ */
+let dataID = {
+  "name": "Identifikasi Siswa",
+  "data": {
+    "participant_id": "HRTKRX"
+  },
+  "subtestHash": "QV2ITfs0KhkL5xC5WmShJFq4cu0=",
+  "subtestId": "4f6fbdd4-9ef2-ac35-a880-96600b9b87f9",
+  "prototype": "id",
+  "timestamp": 1491268359431
+};
+
+// Create header for ID prototype
+function createIDHeader(body) {
+  let dataKey = Object.keys(body.data);
+  return { header: dataKey[0], key: dataKey[0] }
+}
+
+// Generate result for ID prototype
+function processIDResult(body) {
+  let consentData = {};
+  let dataKey = Object.keys(body.data);
+  consentData[body.subtestId] = {
+    [dataKey[0]]: body.data.participant_id
+  };
+  return consentData;
+}
 
 
 /*
