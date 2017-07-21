@@ -15,15 +15,14 @@ const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
 
 /*
  *  Creates column settings for CSV generation
-*/
-function generateColumnSettings (doc) {
+ */
+function generateColumnSettings(doc) {
   return _.map(doc, (data) => {
     return { header: data.toUpperCase(), key: data }
   });
 }
 
-let sampleData = [
-  {
+let sampleDatetimeData = [{
     "name": "Tanggal Penilaian ",
     "data": {
       "year": "2017",
@@ -65,7 +64,7 @@ let sampleData = [
 ]
 
 // Generate header for datetime protype subtest
-function createDatetimeHeader (data) {
+function createDatetimeHeader(data) {
   let datetimeCount = 0;
   let suffix;
   let datetimeHeader = [];
@@ -81,13 +80,22 @@ function createDatetimeHeader (data) {
 }
 
 
-// Process subtestData for datetime prototype 
-function processDatetimeResult (body) {
+/* Process subtestData for datetime prototype
+  * DatetimeResult = {
+      subtestId: {
+        year: "1990"
+        month: "jan"
+        day: "01"
+        assess_time: "0:00"
+      }
+    }
+*/
+function processDatetimeResult(body) {
   let processedData = [];
   _.each(body, (doc) => {
     let datetimeResult = {};
     datetimeResult[doc.subtestId] = {
-      year : doc.data.year,
+      year: doc.data.year,
       month: doc.data.month,
       day: doc.data.day,
       assess_time: doc.data.time
@@ -98,87 +106,155 @@ function processDatetimeResult (body) {
   return processedData;
 }
 
-
-exports.getAll = (req, res) => {
-  let result = createDatetimeHeader(sampleData);
-  let processed = processDatetimeResult(sampleData);
+/*
+ * GET /assessnent/datetime
+ * return location header and location processed results
+*/
+exports.getDatetime = (req, res) => {
+  let result = createDatetimeHeader(sampleDatetimeData);
+  let processed = processDatetimeResult(sampleDatetimeData);
 
   res.json({ result, processed });
 }
 
 
+let sampleLocationData = {
+  "name": "Lokasi Sekolah",
+  "data": {
+    "labels": [
+      "Propinsi",
+      "Kabupaten",
+      "Code",
+      "Sekolah"
+    ],
+    "location": [
+      "South Sulawesi",
+      "Bantaeng",
+      "73K5",
+      "SDN 46 Kadangkunyi"
+    ]
+  },
+  "subtestHash": "MJPqvJDX7Erzy4A83a/jPdmKT3g=",
+  "subtestId": "68a35806-11d8-694a-8f49-86e11f0fd9ad",
+  "prototype": "location",
+  "timestamp": 1491268238404
+};
+
+// Generate header for location protype subtest
+function createLocationHeader (locData) {
+  let locationHeader = [];
+  _.forEach(locData.data.labels, (item) => {
+    locationHeader.push({ header: item, key: item.toLowerCase() });
+  });
+  return locationHeader;
+}
+
 /*
- *Ignore these functions below
+ * Process subtestData for location prototype
+ *  locationResult = {
+      subtestId: {
+        [label]: [location]
+      }
+    }
 */
-function generateCSV () {
+function processLocationResult (subData) {
+  let i, locData = {}, locationResult = {};
+  let labels = subData.data.labels;
+  let location = subData.data.location;
+  let subtestId = subData.subtestId;
+
+  for (i = 0; i < labels.length; i++) {
+    let key = labels[i].toLowerCase();
+    locData[key] = location[i];
+  }
+  locationResult[subtestId] = locData;
+
+  return  locationResult;
+}
+
+/*
+ * GET /assessnent/location
+ * return location header and location processed results
+*/
+exports.getLocation = (req, res) => {
+  let locHeader = createLocationHeader(sampleLocationData);
+  let locResult = processLocationResult(sampleLocationData);
+  res.json({ locHeader, locResult });
+}
+
+
+/*
+  *Ignore these functions below
+  */
+function generateCSV() {
 
   var columnData;
   var allDB = [];
   let columnHeaders;
 
-    let workbook = new Excel.Workbook();
-    workbook.creator = 'Brockman';
-    workbook.lastModifiedBy = 'Matt';
-    workbook.created = new Date(2017, 7, 13);
-    workbook.modified = new Date();
-    workbook.lastPrinted = new Date(2017, 4, 27);
-    workbook.views = [{
-      x: 0,
-      y: 0,
-      width: 10000,
-      height: 20000,
-      firstSheet: 0,
-      activeTab: 1,
-      visibility: 'visible'
-    }];
+  let workbook = new Excel.Workbook();
+  workbook.creator = 'Brockman';
+  workbook.lastModifiedBy = 'Matt';
+  workbook.created = new Date(2017, 7, 13);
+  workbook.modified = new Date();
+  workbook.lastPrinted = new Date(2017, 4, 27);
+  workbook.views = [{
+    x: 0,
+    y: 0,
+    width: 10000,
+    height: 20000,
+    firstSheet: 0,
+    activeTab: 1,
+    visibility: 'visible'
+  }];
 
-    let excelSheet = workbook.addWorksheet('Test Sheet', {
-      views: [{ xSplit: 1 }],
-      pageSetup: { paperSize: 9, orientation: 'landscape' }
-    });
+  let excelSheet = workbook.addWorksheet('Test Sheet', {
+    views: [{ xSplit: 1 }],
+    pageSetup: { paperSize: 9, orientation: 'landscape' }
+  });
 
 
-    let a = 0;
-    let columnSettings = _.each(body, (col, ind) => {
-      if (typeof col === 'object') {
-        let arr = _.keysIn(col);
-        while (a < arr.length) {
-          allDB.push({ header: `${arr[a]}-${String(a)}`, key: `arr[a]-${String(a)}` });
-          a++;
-        }
-        return;
+  let a = 0;
+  let columnSettings = _.each(body, (col, ind) => {
+    if (typeof col === 'object') {
+      let arr = _.keysIn(col);
+      while (a < arr.length) {
+        allDB.push({ header: `${arr[a]}-${String(a)}`, key: `arr[a]-${String(a)}` });
+        a++;
       }
-      allDB.push({ header: ind, key: ind });
-    });
-    // console.log('sets:', columnSettings);
-    console.log('sets:', allDB);
-    // let ars = {
-    //   data: { yes: 'name' }
-    // };
-    // var sars = Object.keys(ars.data)[0];
+      return;
+    }
+    allDB.push({ header: ind, key: ind });
+  });
+  // console.log('sets:', columnSettings);
+  console.log('sets:', allDB);
+  // let ars = {
+  //   data: { yes: 'name' }
+  // };
+  // var sars = Object.keys(ars.data)[0];
 
-    excelSheet.columns = allDB;
-    // let rowData = resultCollections.slice(0, 100);
+  excelSheet.columns = allDB;
+  // let rowData = resultCollections.slice(0, 100);
 
-    _.each(body, (doc, col) => {
-      if (typeof doc === 'object') {
-        excelSheet.addRow({key: 2, undefined: 'bill'})
-        return;
-      }
-      excelSheet.addRow({id: 2, undefined: 'bill'})
+  _.each(body, (doc, col) => {
+    if (typeof doc === 'object') {
+      excelSheet.addRow({ key: 2, undefined: 'bill' })
+      return;
+    }
+    excelSheet.addRow({ id: 2, undefined: 'bill' })
       // console.log('ROW', excelSheet.getRow(2).values);
-    });
+  });
 
-    let creationTime = new Date().toISOString();
-    let filename = `testcsvfile-${creationTime.slice(0, creationTime.indexOf('T'))}.xlsx`;
+  let creationTime = new Date().toISOString();
+  let filename = `testcsvfile-${creationTime.slice(0, creationTime.indexOf('T'))}.xlsx`;
 
-    // let workbook = createAndFillWorkbook();
-    workbook.xlsx.writeFile(filename, 'utf8')
-      .then(() => console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓')))
-      .catch((err) => console.error(err));
+  // let workbook = createAndFillWorkbook();
+  workbook.xlsx.writeFile(filename, 'utf8')
+    .then(() => console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓')))
+    .catch((err) => console.error(err));
 
-    // res.json({ columnsSettings });
-    // res.json({ columnHeaders, results: resultCollections.slice(98, 100) });
+  // res.json({ columnsSettings });
+  // res.json({ columnHeaders, results: resultCollections.slice(98, 100) });
   // })
 
 }
@@ -186,7 +262,7 @@ function generateCSV () {
 function getResultCollection() {
   _.forEach(allData, function(data) {
     _.filter(data.doc, function(item, index) {
-      if (typeof item ===  'object') {
+      if (typeof item === 'object') {
         // console.log(index);
         if (index === 'device') {
           let deviceKey = Object.keys(item)[0];
@@ -235,8 +311,7 @@ function getResultCollection() {
             }
           });
         }
-      }
-      else {
+      } else {
         simpleHeaders.push({ header: index, key: index });
       }
     })
@@ -246,4 +321,3 @@ function getResultCollection() {
 
   res.json({ subtest, simpleHeaders, deepHeaders });
 }
-

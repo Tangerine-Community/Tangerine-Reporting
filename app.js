@@ -37,8 +37,8 @@ app.get('/', function(req, res) {
   res.send('\n Welcome to Tangerine Reporting Service ');
 });
 
-app.get('/assessment', assessmentController.getAll);
-// app.get('/assessment/:id', assessmentController.getAssessment);
+app.get('/assessment/datetime', assessmentController.getDatetime);
+app.get('/assessment/location', assessmentController.getLocation);
 // app.get('/assessment/results', assessmentController.getResults);
 // app.get('/assessment/questions', assessmentController.getQuestions);
 // app.get('/assessment/subtests', assessmentController.getSubtests);
