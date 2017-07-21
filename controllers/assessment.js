@@ -11,6 +11,7 @@ const chalk = require('chalk');
  */
 const nano = require('nano');
 const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
+const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 
 
 /*
@@ -109,10 +110,20 @@ function processDatetimeResult(body) {
 /*
  * GET /assessnent/datetime
  * return location header and location processed results
-*/
+ */
 exports.getDatetime = (req, res) => {
   let result = createDatetimeHeader(sampleDatetimeData);
   let processed = processDatetimeResult(sampleDatetimeData);
+
+
+  // and insert a document in it
+  // RESULT_DB.insert({ resu, function(err, body, header) {
+  //   if (err) {
+  //     return;
+  //   }
+  //   console.log('you have inserted the rabbit.')
+  //   console.log(body);
+  // });
 
   res.json({ result, processed });
 }
@@ -141,7 +152,7 @@ let sampleLocationData = {
 };
 
 // Generate header for location protype subtest
-function createLocationHeader (locData) {
+function createLocationHeader(locData) {
   let locationHeader = [];
   _.forEach(locData.data.labels, (item) => {
     locationHeader.push({ header: item, key: item.toLowerCase() });
@@ -157,8 +168,9 @@ function createLocationHeader (locData) {
       }
     }
 */
-function processLocationResult (subData) {
-  let i, locData = {}, locationResult = {};
+function processLocationResult(subData) {
+  let i, locData = {},
+    locationResult = {};
   let labels = subData.data.labels;
   let location = subData.data.location;
   let subtestId = subData.subtestId;
@@ -169,23 +181,58 @@ function processLocationResult (subData) {
   }
   locationResult[subtestId] = locData;
 
-  return  locationResult;
+  return locationResult;
 }
 
 /*
  * GET /assessnent/location
  * return location header and location processed results
-*/
+ */
 exports.getLocation = (req, res) => {
-  let locHeader = createLocationHeader(sampleLocationData);
-  let locResult = processLocationResult(sampleLocationData);
+  let locHeader = processConsentResult(consent);
+  // let locResult = processLocationResult(sampleLocationData);
+  let locResult = createConsentHeader(consent);
   res.json({ locHeader, locResult });
 }
 
 
 /*
-  *Ignore these functions below
-  */
+ * PROTOTYPE = CONSENT
+ *
+ */
+let consent = {
+  "name": "Persetujuan Verbal ",
+  "data": {
+    "consent": "yes"
+  },
+  "subtestHash": "VrL1W7/LlOsR4bQlrjFhm03D0LA=",
+  "subtestId": "63404288-e1be-05f1-b1a9-8e40d060f062",
+  "prototype": "consent",
+  "timestamp": 1491268357724
+};
+
+// Create header for consent prototype
+function createConsentHeader(body) {
+  let dataKey =  Object.keys(body.data);
+  return { header: 'Consent', key: dataKey[0] }
+}
+
+// Generate result for consent prototype
+function processConsentResult(body) {
+  let consentData = {};
+  let dataKey =  Object.keys(body.data);
+  consentData[body.subtestId] = {
+    [dataKey[0]]: body.data.consent
+  };
+  return consentData;
+}
+
+
+
+
+/*
+ * Ignore these functions below
+ */
 function generateCSV() {
 
   var columnData;
