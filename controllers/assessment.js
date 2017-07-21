@@ -13,27 +13,6 @@ const nano = require('nano');
 const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
 
 
-// Creates headers for CSV columns
-function createHeaders (data) {
-  let questionHeaders = [];
-  _.forEach(data, (subData) => {
-    _.forEach(subData.doc, (val, key, doc) => {
-      if (typeof val === 'object') {
-        if (doc.collection === 'question') {
-          _.forEach(val, (item) => {
-            questionHeaders.push(item.label);
-          });
-          return;
-        }
-        questionHeaders.push(key);
-        return;
-      }
-      questionHeaders.push(key);
-    });
-  });
-  return _.uniq(questionHeaders);
-}
-
 /*
  *  Creates column settings for CSV generation
 */
@@ -43,55 +22,8 @@ function generateColumnSettings (doc) {
   });
 }
 
-
-
-/*
-
-result = {
-  subtestID: {
-    year: afsa,
-    month: afasd,
-    day: asfsad,
-    assesstime: adfsad
-  }
-}
-
-*/
-
-function processDatetimeResult (data) {
-  let all = [];
-  let ans = _.each(data.doc, (doc) => {
-    // suffix = datetimeCount > 0 ? '_' + datetimeCount : '';
-    // console.log('in here', datetimeCount, suffix);
-
-    // _.each(data.doc.substestData, (doc, ind) => {
-      // allDB.push({ header: `${arr[a]}-${String(a)}`, key: `arr[a]-${String(a)}` });
-      // allDB.push({ header: `${ind+suffix}`, key: `${ind+suffix}` });
-      let datetimeResult = {};
-      console.log(doc);
-      datetimeResult[doc.subtestId] = {
-        year : doc.data.year,
-        month: doc.data.month,
-        day: doc.data.day,
-        assess_time: doc.data.time
-      }
-
-      all.push(doc);
-    // });
-
-    // let data[subtestId] = {};
-  });
-
-  return all;
-}
-
-/**
- * GET /assessnent
- * Retrieve all assessments
- */
-
 let sampleData = [
-   {
+  {
     "name": "Tanggal Penilaian ",
     "data": {
       "year": "2017",
@@ -105,48 +37,73 @@ let sampleData = [
     "timestamp": 1491268239410
   },
   {
-    "name": "Tanggal Penilaian ",
+    "name": "Mangalla Arigonna ",
     "data": {
       "year": "2017",
       "month": "apr",
-      "day": "4",
-      "time": "9:10"
+      "day": "14",
+      "time": "9:48"
     },
     "subtestHash": "QCAbEhoJSnCWrmClC2mwAD2Ziow=",
-    "subtestId": "074a96b6-8835-2e3c-6b41-e8a678d56987",
+    "subtestId": "1aa909d2-8835-2e3c-6b41-e8a678d56987",
+    "prototype": "datetime",
+    "timestamp": 1491268239410
+  },
+  {
+    "name": "Asgard Thorain ",
+    "data": {
+      "year": "2017",
+      "month": "apr",
+      "day": "7",
+      "time": "6:48"
+    },
+    "subtestHash": "QCAbEhoJSnCWrmClC2mwAD2Ziow=",
+    "subtestId": "3c8892ad-8835-2e3c-6b41-e8a678d56987",
     "prototype": "datetime",
     "timestamp": 1491268239410
   }
 ]
 
-function datetimeHeader (data) {
+// Generate header for datetime protype subtest
+function createDatetimeHeader (data) {
   let datetimeCount = 0;
   let suffix;
-  let allDB = [];
+  let datetimeHeader = [];
   _.each(data, (doc) => {
     suffix = datetimeCount > 0 ? '_' + datetimeCount : '';
-    allDB.push({ header: `year${suffix}`, key: `year${suffix}` });
-    allDB.push({ header: `month${suffix}`, key: `month${suffix}` });
-    allDB.push({ header: `day${suffix}`, key: `day${suffix}` });
-    allDB.push({ header: `assess_time${suffix}`, key: `assess_time${suffix}` });
+    datetimeHeader.push({ header: `year${suffix}`, key: `year${suffix}` });
+    datetimeHeader.push({ header: `month${suffix}`, key: `month${suffix}` });
+    datetimeHeader.push({ header: `day${suffix}`, key: `day${suffix}` });
+    datetimeHeader.push({ header: `assess_time${suffix}`, key: `assess_time${suffix}` });
     datetimeCount++;
   });
-  return allDB;
+  return datetimeHeader;
 }
 
-exports.getAll = (req, res) => {
-  // TODO: Promisify these queries
-  // let and =  datetimeHeader(sampleData);
-  //   res.json({ and });
 
-  TMP_TANGERINEDB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
-    if (err) return res.send(err);
-
-    let first = body.rows;
-    let result = datetimeHeader(first);
-
-    res.json({ result });
+// Process subtestData for datetime prototype 
+function processDatetimeResult (body) {
+  let processedData = [];
+  _.each(body, (doc) => {
+    let datetimeResult = {};
+    datetimeResult[doc.subtestId] = {
+      year : doc.data.year,
+      month: doc.data.month,
+      day: doc.data.day,
+      assess_time: doc.data.time
+    }
+    processedData.push(datetimeResult);
   });
+
+  return processedData;
+}
+
+
+exports.getAll = (req, res) => {
+  let result = createDatetimeHeader(sampleData);
+  let processed = processDatetimeResult(sampleData);
+
+  res.json({ result, processed });
 }
 
 
@@ -225,7 +182,6 @@ function generateCSV () {
   // })
 
 }
-
 
 function getResultCollection() {
   _.forEach(allData, function(data) {
