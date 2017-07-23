@@ -1,6 +1,6 @@
 /**
  * Module dependencies.
-*/
+ */
 
 const _ = require('lodash');
 const Excel = require('exceljs');
@@ -8,7 +8,7 @@ const chalk = require('chalk');
 
 /**
  * Connect to Couch DB
-*/
+ */
 const nano = require('nano');
 const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
@@ -70,11 +70,12 @@ function createDatetimeHeader(data) {
   let suffix;
   let datetimeHeader = [];
   _.each(data, (doc) => {
+    let index = Object.keys(doc)[0];
     suffix = datetimeCount > 0 ? '_' + datetimeCount : '';
-    datetimeHeader.push({ header: `year${suffix}`, key: `${doc.subtestId}_year${suffix}` });
-    datetimeHeader.push({ header: `month${suffix}`, key: `${doc.subtestId}_month${suffix}` });
-    datetimeHeader.push({ header: `day${suffix}`, key: `${doc.subtestId}_day${suffix}` });
-    datetimeHeader.push({ header: `assess_time${suffix}`, key: `${doc.subtestId}_assess_time${suffix}` });
+    datetimeHeader.push({ header: `year${suffix}`, key: `${index}_year${suffix}` });
+    datetimeHeader.push({ header: `month${suffix}`, key: `${index}_month${suffix}` });
+    datetimeHeader.push({ header: `day${suffix}`, key: `${index}_day${suffix}` });
+    datetimeHeader.push({ header: `assess_time${suffix}`, key: `${index}_assess_time${suffix}` });
     datetimeCount++;
   });
   return datetimeHeader;
@@ -110,10 +111,10 @@ function processDatetimeResult(body) {
 /*
  * GET /assessment/datetime
  * return location header and location processed results
-*/
+ */
 exports.getDatetime = (req, res) => {
-  let result = createDatetimeHeader(sampleDatetimeData);
   let processed = processDatetimeResult(sampleDatetimeData);
+  let result = createDatetimeHeader(processed);
 
   // Insert processed results into a result_db
   RESULT_DB.insert({ processed }, function(err, body, header) {
@@ -125,7 +126,7 @@ exports.getDatetime = (req, res) => {
 
 /*
  * PROTOTYPE = LOCATION
-*/
+ */
 let sampleLocationData = {
   "name": "Lokasi Sekolah",
   "data": {
@@ -184,7 +185,7 @@ function processLocationResult(subData) {
 /*
  * GET /assessnent/location
  * return location header and location processed results
-*/
+ */
 exports.getLocation = (req, res) => {
   let locResult = processSurveyResult(surveyData);
   let locHeader = createSurveyHeader(locResult);
@@ -194,7 +195,7 @@ exports.getLocation = (req, res) => {
 
 /*
  * PROTOTYPE = CONSENT
-*/
+ */
 let consent = {
   "name": "Persetujuan Verbal ",
   "data": {
@@ -224,7 +225,7 @@ function processConsentResult(body) {
 
 /*
  * PROTOTYPE = ID
-*/
+ */
 let dataID = {
   "name": "Identifikasi Siswa",
   "data": {
@@ -254,7 +255,7 @@ function processIDResult(body) {
 
 /*
  * PROTOTYPE = SURVEY
-*/
+ */
 let surveyData = {
   "name": "Informasi Siswa",
   "data": {
@@ -293,7 +294,7 @@ function createSurveyHeader(body) {
   let survey = [];
   // let keys = Object.keys(body.data)
   // _.forEach(keys, (item, el) => {
-    console.log(body);
+  console.log(body);
 
   //   survey.push({ header: body.data[item], key: });
   // });
@@ -315,7 +316,7 @@ function processSurveyResult(body) {
 
 /*
  * Ignore these functions below
-*/
+ */
 
 function generateCSV() {
 
