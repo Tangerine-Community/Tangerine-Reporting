@@ -69,7 +69,7 @@ function createDatetimeHeader(data) {
   let datetimeCount = 0;
   let suffix;
   let datetimeHeader = [];
-  _.each(data, (doc) => {
+  _.forEach(data, (doc) => {
     let index = Object.keys(doc)[0];
     suffix = datetimeCount > 0 ? '_' + datetimeCount : '';
     datetimeHeader.push({ header: `year${suffix}`, key: `${index}_year${suffix}` });
@@ -94,18 +94,17 @@ function createDatetimeHeader(data) {
 */
 function processDatetimeResult(body) {
   let processedData = [];
-  _.each(body, (doc) => {
-    let datetimeResult = {};
+  let datetimeResult = {};
+  _.forEach(body, (doc) => {
     datetimeResult[doc.subtestId] = {
       year: doc.data.year,
       month: doc.data.month,
       day: doc.data.day,
       assess_time: doc.data.time
     }
-    processedData.push(datetimeResult);
   });
 
-  return processedData;
+  return datetimeResult;
 }
 
 /*
@@ -127,33 +126,63 @@ exports.getDatetime = (req, res) => {
 /*
  * PROTOTYPE = LOCATION
  */
-let sampleLocationData = {
-  "name": "Lokasi Sekolah",
-  "data": {
-    "labels": [
-      "Propinsi",
-      "Kabupaten",
-      "Code",
-      "Sekolah"
-    ],
-    "location": [
-      "South Sulawesi",
-      "Bantaeng",
-      "73K5",
-      "SDN 46 Kadangkunyi"
-    ]
+let sampleLocationData = [
+  {
+    "name": "Lokasi Sekolah",
+    "data": {
+      "labels": [
+        "Propinsi's's'",
+        "Kabupaten",
+        "Code",
+        "Sekolah"
+      ],
+      "location": [
+        "South Sulawesi",
+        "Bantaeng",
+        "73K5",
+        "SDN 46 Kadangkunyi"
+      ]
+    },
+    "subtestHash": "MJPqvJDX7Erzy4A83a/jPdmKT3g=",
+    "subtestId": "68a35806-11d8-694a-8f49-86e11f0fd9ad",
+    "prototype": "location",
+    "timestamp": 1491268238404
   },
-  "subtestHash": "MJPqvJDX7Erzy4A83a/jPdmKT3g=",
-  "subtestId": "68a35806-11d8-694a-8f49-86e11f0fd9ad",
-  "prototype": "location",
-  "timestamp": 1491268238404
-};
+  {
+    "name": "Sequioa Lebanon",
+    "data": {
+      "labels": [
+        "Propinsi's's'",
+        "Kabupaten",
+        "Code",
+        "Sekolah"
+      ],
+      "location": [
+        "Yaba",
+        "Victoria Island",
+        "Ikeja",
+        "MAGODO"
+      ]
+    },
+    "subtestHash": "MJPqvJDX7Erzy4A83a/jPdmKT3g=",
+    "subtestId": "9da089af-11d8-694a-8f49-86e11f0fd9ad",
+    "prototype": "location",
+    "timestamp": 1491268238404
+  }
+];
 
 // Generate header for location protype subtest
-function createLocationHeader(locData) {
+function createLocationHeader(data) {
   let locationHeader = [];
-  _.forEach(locData.data.labels, (item) => {
-    locationHeader.push({ header: item, key: item.toLowerCase() });
+  let count = 0;
+
+  _.forEach(data, (item, index) => {
+    let i, propKeys = Object.keys(item);
+    for (i = 0; i < propKeys.length; i++) {
+      let suffix = count > 0 ? propKeys[i] + '_' + count : propKeys[i];
+      locationHeader.push({ header: suffix, key: `${index}_${suffix}` });
+    }
+    count++;
   });
   return locationHeader;
 }
@@ -166,18 +195,21 @@ function createLocationHeader(locData) {
       }
     }
 */
-function processLocationResult(subData) {
-  let i, locData = {},
-    locationResult = {};
-  let labels = subData.data.labels;
-  let location = subData.data.location;
-  let subtestId = subData.subtestId;
+function processLocationResult(data) {
+  let locationResult = {};
 
-  for (i = 0; i < labels.length; i++) {
-    let key = labels[i].toLowerCase();
-    locData[key] = location[i];
-  }
-  locationResult[subtestId] = locData;
+  _.forEach(data, (subData) => {
+    let i, locData = {};
+    let labels = subData.data.labels;
+    let location = subData.data.location;
+    let subtestId = subData.subtestId;
+
+    for (i = 0; i < labels.length; i++) {
+      let key = labels[i].toLowerCase();
+      locData[key] = location[i];
+    }
+    locationResult[subtestId] = locData;
+  });
 
   return locationResult;
 }
@@ -187,9 +219,22 @@ function processLocationResult(subData) {
  * return location header and location processed results
  */
 exports.getLocation = (req, res) => {
-  let locResult = processSurveyResult(surveyData);
-  let locHeader = createSurveyHeader(locResult);
-  res.json({ locHeader, locResult });
+  let dtResult = processDatetimeResult(sampleDatetimeData);
+  let dtHeader = createDatetimeHeader(dtResult);
+
+  let locResult = processLocationResult(sampleLocationData);
+  let locHeader = createLocationHeader(locResult);
+
+  let processed = Object.assign(dtResult, locResult);
+  let colHeaders = locHeader.concat(dtHeader);
+
+  // Insert processed results into a result_db
+  RESULT_DB.insert({ processed }, function(err, body, header) {
+    if (err) res.send(err);
+    generateCSV(colHeaders, processed)
+    res.json({ processed, colHeaders });
+  });
+
 }
 
 
@@ -275,20 +320,6 @@ let surveyData = {
   "timestamp": 1491268446636
 };
 
-let rest = {
-  "862fa79a-4516-e190-5ee1-88bc42e2aeba": {
-    "stinfo1": "0",
-    "stinfo2": "0",
-    "stinfo3": "0",
-    "stinfo4": "1",
-    "stinfo5": "1",
-    "stinfo6": "1",
-    "stinfo7": "1",
-    "stinfo8": "1",
-    "stinfo9": "0"
-  }
-};
-
 // Create header for survey prototype
 function createSurveyHeader(body) {
   let survey = [];
@@ -318,76 +349,31 @@ function processSurveyResult(body) {
  * Ignore these functions below
  */
 
-function generateCSV() {
-
-  var columnData;
-  var allDB = [];
-  let columnHeaders;
-
+function generateCSV(colSettings, data) {
   let workbook = new Excel.Workbook();
   workbook.creator = 'Brockman';
   workbook.lastModifiedBy = 'Matt';
   workbook.created = new Date(2017, 7, 13);
   workbook.modified = new Date();
   workbook.lastPrinted = new Date(2017, 4, 27);
-  workbook.views = [{
-    x: 0,
-    y: 0,
-    width: 10000,
-    height: 20000,
-    firstSheet: 0,
-    activeTab: 1,
-    visibility: 'visible'
-  }];
 
-  let excelSheet = workbook.addWorksheet('Test Sheet', {
-    views: [{ xSplit: 1 }],
-    pageSetup: { paperSize: 9, orientation: 'landscape' }
+  let excelSheet = workbook.addWorksheet('DTLOC Sheet', {
+    views: [{ xSplit: 1 }], pageSetup: { paperSize: 9, orientation: 'landscape' }
   });
 
+  excelSheet.columns = colSettings
 
-  let a = 0;
-  let columnSettings = _.each(body, (col, ind) => {
-    if (typeof col === 'object') {
-      let arr = _.keysIn(col);
-      while (a < arr.length) {
-        allDB.push({ header: `${arr[a]}-${String(a)}`, key: `arr[a]-${String(a)}` });
-        a++;
-      }
-      return;
-    }
-    allDB.push({ header: ind, key: ind });
-  });
-  // console.log('sets:', columnSettings);
-  console.log('sets:', allDB);
-  // let ars = {
-  //   data: { yes: 'name' }
-  // };
-  // var sars = Object.keys(ars.data)[0];
-
-  excelSheet.columns = allDB;
-  // let rowData = resultCollections.slice(0, 100);
-
-  _.each(body, (doc, col) => {
-    if (typeof doc === 'object') {
-      excelSheet.addRow({ key: 2, undefined: 'bill' })
-      return;
-    }
-    excelSheet.addRow({ id: 2, undefined: 'bill' })
-      // console.log('ROW', excelSheet.getRow(2).values);
-  });
+  excelSheet.addRow(data);
 
   let creationTime = new Date().toISOString();
-  let filename = `testcsvfile-${creationTime.slice(0, creationTime.indexOf('T'))}.xlsx`;
+  let filename = `testcsvfile-${creationTime}.xlsx`;
 
-  // let workbook = createAndFillWorkbook();
+  // create and fill Workbook;
   workbook.xlsx.writeFile(filename, 'utf8')
     .then(() => console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓')))
     .catch((err) => console.error(err));
 
-  // res.json({ columnsSettings });
-  // res.json({ columnHeaders, results: resultCollections.slice(98, 100) });
-  // })
+  return;
 
 }
 
@@ -453,3 +439,59 @@ function getResultCollection() {
 
   res.json({ subtest, simpleHeaders, deepHeaders });
 }
+
+
+/* Sample Result Schema
+  let assessment = {
+    'assessmentId': 'fadsfasdf',
+    'assessmentName': 'Pengambilan Data EGRA',
+    'subtestId_0': {
+      label_0: location_0,
+      label_1: location_1,
+      label_2: location_2,
+      label_3: location_3
+    },
+    'subtestId_1': {
+      label_0: location_0,
+      label_1: location_1,
+      label_2: location_2,
+      label_3: location_3
+    },
+    'subtestId_0': {
+      year: year,
+      month: month,
+      day: day,
+      assess_time: time
+    },
+    'subtestId_1': {
+      label_0: year,
+      label_1: month,
+      label_2: day,
+      label_3: time
+    },
+    .
+    .
+    .
+    ,
+    'subtestId': {
+      consent: 'yes'
+    },
+    'subtestId': {
+      participant_id: '92'
+    },
+    start_time: 12344555,
+    enumerator: 'mujiana'
+    tangerince_version: 0.4.7,
+    device: 'afdasdfasdfasdfsd',
+    },
+    order_map: '0,1,2,3,4,5,6,7,8',
+    instanceId: 'necd-vhga-yymg',
+    updated: 'Thu Apr 06 2017 07:45:06 GMT+0700 (WIT)',
+    fromInstanceId: 'necd-vhga-yymg',
+    editedBy: 'mujiana',
+    collection: 'result'
+
+  };
+
+*/
+
