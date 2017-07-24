@@ -72,10 +72,10 @@ function createDatetimeHeader(data) {
   _.forEach(data, (doc) => {
     let index = Object.keys(doc)[0];
     suffix = datetimeCount > 0 ? '_' + datetimeCount : '';
-    datetimeHeader.push({ header: `year${suffix}`, key: `${index}_year${suffix}` });
-    datetimeHeader.push({ header: `month${suffix}`, key: `${index}_month${suffix}` });
-    datetimeHeader.push({ header: `day${suffix}`, key: `${index}_day${suffix}` });
-    datetimeHeader.push({ header: `assess_time${suffix}`, key: `${index}_assess_time${suffix}` });
+    datetimeHeader.push({ header: `year${suffix}`, key: `year${suffix}` });
+    datetimeHeader.push({ header: `month${suffix}`, key: `month${suffix}` });
+    datetimeHeader.push({ header: `day${suffix}`, key: `day${suffix}` });
+    datetimeHeader.push({ header: `assess_time${suffix}`, key: `assess_time${suffix}` });
     datetimeCount++;
   });
   return datetimeHeader;
@@ -226,14 +226,14 @@ exports.getLocation = (req, res) => {
   let locHeader = createLocationHeader(locResult);
 
   let processed = Object.assign(dtResult, locResult);
-  let colHeaders = locHeader.concat(dtHeader);
+  let colHeaders = dtHeader.concat(locHeader);
 
   // Insert processed results into a result_db
-  RESULT_DB.insert({ processed }, function(err, body, header) {
-    if (err) res.send(err);
+  // RESULT_DB.insert({ processed }, function(err, body, header) {
+  //   if (err) res.send(err);
     generateCSV(colHeaders, processed)
     res.json({ processed, colHeaders });
-  });
+  // });
 
 }
 
@@ -363,7 +363,29 @@ function generateCSV(colSettings, data) {
 
   excelSheet.columns = colSettings
 
-  excelSheet.addRow(data);
+    let count = 0, loc = 0,  allData = {};
+  _.each(data, (subData,val) => {
+    // console.log(subData, val);
+    if (subData.year) {
+      let dtSuffix = count > 0 ? '_' + count : '';
+      allData[`year${dtSuffix}`] = subData.year;
+      allData[`month${dtSuffix}`] = subData.month;
+      allData[`day${dtSuffix}`] = subData.day;
+      allData[`assess_time${dtSuffix}`] = subData.assess_time;
+      count++;
+      return ;
+    }
+    _.each(subData, (item, ind) => {
+      let locSuffix = loc > 0 ? '_' + loc : '';
+      let key = `${val}_${ind}${locSuffix}`;
+      allData[key] = item;
+    });
+    loc++;
+      // console.log('yes', count);
+  });
+
+  console.log(allData);
+    excelSheet.addRow(allData);
 
   let creationTime = new Date().toISOString();
   let filename = `testcsvfile-${creationTime}.xlsx`;
