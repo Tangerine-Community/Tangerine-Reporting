@@ -28,6 +28,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
  * Controllers (route handlers).
  */
 const assessmentController = require('./controllers/assessment');
+const resultController = require('./controllers/result');
 
 /**
  * Primary app routes
@@ -37,9 +38,9 @@ app.get('/', function(req, res) {
   res.send('\n Welcome to Tangerine Reporting Service ');
 });
 
-app.get('/assessment/datetime', assessmentController.getDatetime);
-app.get('/assessment/location', assessmentController.getLocation);
-// app.get('/assessment/results', assessmentController.getResults);
+app.get('/assessment', assessmentController.all);
+app.get('/assessment/datetime', resultController.getDatetime);
+app.get('/assessment/location', resultController.getLocation);
 // app.get('/assessment/questions', assessmentController.getQuestions);
 // app.get('/assessment/subtests', assessmentController.getSubtests);
 
