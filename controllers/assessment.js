@@ -20,18 +20,61 @@ exports.all = (req, res) => {
       return getSubtests();
     })
     .then((subtestData) => {
-      let locationPrototype = createLocation(subtestData);
-      let datetimePrototype = createDatetime(subtestData);
-      let consentPrototype = createConsent(subtestData);
-      let idPrototype = createId(subtestData);
-      let surveyPrototype = createSurvey(subtestData);
-      let gpsPrototype = createGps(subtestData);
-      let cameraPrototype = create(subtestData);
+      let subtestCount = {
+        locationCount: 0,
+        datetimeCount: 0,
+        idCount: 0,
+        consentCount: 0,
+        gpsCount: 0,
+        surveyCount: 0,
+        cameraCount: 0
+      };
+      _.each(subtestData, (data) => {
+        if (data.prototype === 'location') {
+          let location = createLocation(data, subtestCount.locationCount);
+          assessments = assessments.concat(location);
+          subtestCount.locationCount++;
+          return ;
+        }
+        if (data.prototype === 'datetime') {
+          let datetime = createDatetime(data, subtestCount.datetimeCount);
+          assessments = assessments.concat(datetime);
+          subtestCount.datetimeCount++;
+          return ;
+        }
+        if (data.prototype === 'consent') {
+          let consent = createConsent(data, subtestCount.consentCount);
+          assessments = assessments.concat(consent);
+          subtestCount.consentCount++;
+          return ;
+        }
+        if (data.prototype === 'id') {
+          let id = createId(data, subtestCount.idCount);
+          assessments = assessments.concat(id);
+          subtestCount.idCount++;
+          return ;
+        }
+        if (data.prototype === 'survey') {
+          let survey = createSurvey(data, subtestCount.surveyCount);
+          assessments = assessments.concat(survey);
+          subtestCount.surveyCount++;
+          return ;
+        }
+        if (data.prototype === 'gps') {
+          let gps = createGps(data, subtestCount.gpsCount);
+          assessments = assessments.concat(gps);
+          subtestCount.gpsCount++;
+          return ;
+        }
+        if (data.prototype === 'camera') {
+          let camera = createCamera(data, subtestCount.cameraCount);
+          assessments = assessments.concat(camera);
+          subtestCount.cameraCount++;
+          return ;
+        }
+      });
 
-      let result =  assessments.concat(locationPrototype, datetimePrototype, consentPrototype);
-      result = result.concat(surveyPrototype, gpsPrototype, cameraPrototype);
-
-      res.json(result);
+      res.json(ans);
     })
     .catch((err) => {
       res.json(Error(err));
@@ -71,124 +114,91 @@ function getSubtests() {
 }
 
 // create location prototype column data
-function createLocation(locData) {
+function createLocation(doc, count) {
   let locationHeader = [];
-  let locationCount = 0;
-
-  _.forEach(locData, (subData) => {
-    if (subData.prototype === 'location') {
-      let labels = subData.locationCols;
-      for (i = 0; i < labels.length; i++) {
-        let locSuffix = locationCount > 0 ? `_${locationCount}` : '';
-        locationHeader.push({
-          header: `${labels[i]}${locSuffix}`,
-          key: `${subData._id}_${labels[i]}${locSuffix}`
-        });
-      }
-      locationCount++;
-      return ;
-    }
-  });
+  let labels = doc.locationCols;
+  for (i = 0; i < labels.length; i++) {
+    let locSuffix = count > 0 ? `_${count}` : '';
+    locationHeader.push({
+      header: `${labels[i]}${locSuffix}`,
+      key: `${doc._id}_${labels[i]}${locSuffix}`
+    });
+  }
 
   return locationHeader;
 }
 
 // Create datetime prototype column data
-function createDatetime(dateData) {
-  let suffix, datetimeCount = 0, datetimeHeader = [];
-  _.forEach(dateData, (doc) => {
-    if (doc.prototype === 'datetime') {
-      suffix = datetimeCount > 0 ? `_${datetimeCount}` : '';
-      datetimeHeader.push({ header: `year${suffix}`, key: `${doc._id}_year${suffix}` });
-      datetimeHeader.push({ header: `month${suffix}`, key: `${doc._id}_month${suffix}` });
-      datetimeHeader.push({ header: `day${suffix}`, key: `${doc._id}_day${suffix}` });
-      datetimeHeader.push({ header: `assess_time${suffix}`, key: `${doc._id}_assess_time${suffix}` });
-      datetimeCount++;
-      return ;
-    }
-  });
+function createDatetime(doc, count) {
+  let suffix, datetimeHeader = [];
+  suffix = count > 0 ? `_${count}` : '';
+
+  datetimeHeader.push({ header: `year${suffix}`, key: `${doc._id}_year${suffix}` });
+  datetimeHeader.push({ header: `month${suffix}`, key: `${doc._id}_month${suffix}` });
+  datetimeHeader.push({ header: `day${suffix}`, key: `${doc._id}_day${suffix}` });
+  datetimeHeader.push({ header: `assess_time${suffix}`, key: `${doc._id}_assess_time${suffix}` });
+
   return datetimeHeader;
 }
 
 // Create consent prototype column data
-function createConsent(data) {
-  let suffix, count = 0, consentHeader = [];
-  _.each(data, (doc) => {
-    if (doc.prototype === 'consent') {
-      suffix = count > 0 ? `_${count}` : '';
-      consentHeader.push({ header: `consent${suffix}`, key: `${doc._id}_consent${suffix}` });
-      count++;
-      return ;
-    }
-  });
+function createConsent(doc, count) {
+  let suffix, consentHeader = [];
+
+  suffix = count > 0 ? `_${count}` : '';
+  consentHeader.push({ header: `consent${suffix}`, key: `${doc._id}_consent${suffix}` });
+
   return consentHeader;
 }
 
 // Create Id prototype column data
-function createId(data) {
-  let suffix, count = 0, idHeader = [];
-  _.each(data, (doc) => {
-    if (doc.prototype === 'id') {
-      suffix = count > 0 ? `_${count}` : '';
-      idHeader.push({ header: `id${suffix}`, key: `${doc._id}_id${suffix}` });
-      count++;
-      return ;
-    }
-  });
+function createId(doc, count) {
+  let suffix, idHeader = [];
+
+  suffix = count > 0 ? `_${count}` : '';
+  idHeader.push({ header: `id${suffix}`, key: `${doc._id}_id${suffix}` });
+
   return idHeader;
 }
 
 // Create survey prototype column data
-function createSurvey(data) {
-  let suffix, count = 0, surveyHeader = [];
-  _.each(data, (doc) => {
-    if (doc.prototype === 'survey') {
-      suffix = count > 0 ? `_${count}` : '';
-      for (i = 0; i < doc.items.length; i++) {
-        surveyHeader.push({
-          header: `surveyVar-${i}${suffix}`,
-          key: `${doc._id}_surveyVar-${i}${suffix}`
-        });
-      }
-      count++;
-      return ;
-    }
-  });
+function createSurvey(doc, count) {
+  let suffix, surveyHeader = [];
+  suffix = count > 0 ? `_${count}` : '';
+
+  for (i = 0; i < doc.items.length; i++) {
+    surveyHeader.push({
+      header: `surveyVar-${i}${suffix}`,
+      key: `${doc._id}_surveyVar-${i}${suffix}`
+    });
+  }
   return surveyHeader;
 }
 
 // Create GPS prototype column data
-function createGps(data) {
-  let suffix, count = 0, gpsHeader = [];
-  _.forEach(data, (doc) => {
-    if (doc.prototype === 'gps') {
-      suffix = count > 0 ? `_${count}` : '';
-      gpsHeader.push({ header: `latitude${suffix}`, key: `${doc._id}_latitude${suffix}` });
-      gpsHeader.push({ header: `longitude${suffix}`, key: `${doc._id}_longitude${suffix}` });
-      gpsHeader.push({ header: `accuracy${suffix}`, key: `${doc._id}_accuracy${suffix}` });
-      gpsHeader.push({ header: `altitude${suffix}`, key: `${doc._id}_altitude${suffix}` });
-      gpsHeader.push({ header: `altitudeAccuracy${suffix}`, key: `${doc._id}_altitudeAccuracy${suffix}` });
-      gpsHeader.push({ header: `heading${suffix}`, key: `${doc._id}_heading${suffix}` });
-      gpsHeader.push({ header: `speed${suffix}`, key: `${doc._id}_speed${suffix}` });
-      gpsHeader.push({ header: `timestamp${suffix}`, key: `${doc._id}_timestamp${suffix}` });
-      count++;
-      return ;
-    }
-  });
+function createGps(doc, count) {
+  let suffix, gpsHeader = [];
+  suffix = count > 0 ? `_${count}` : '';
+
+  gpsHeader.push({ header: `latitude${suffix}`, key: `${doc._id}_latitude${suffix}` });
+  gpsHeader.push({ header: `longitude${suffix}`, key: `${doc._id}_longitude${suffix}` });
+  gpsHeader.push({ header: `accuracy${suffix}`, key: `${doc._id}_accuracy${suffix}` });
+  gpsHeader.push({ header: `altitude${suffix}`, key: `${doc._id}_altitude${suffix}` });
+  gpsHeader.push({ header: `altitudeAccuracy${suffix}`, key: `${doc._id}_altitudeAccuracy${suffix}` });
+  gpsHeader.push({ header: `heading${suffix}`, key: `${doc._id}_heading${suffix}` });
+  gpsHeader.push({ header: `speed${suffix}`, key: `${doc._id}_speed${suffix}` });
+  gpsHeader.push({ header: `timestamp${suffix}`, key: `${doc._id}_timestamp${suffix}` });
+
   return gpsHeader;
 }
 
 // Create camera prototype column data
 function createCamera(data) {
-  let suffix, count = 0, cameraheader = [];
-  _.forEach(data, (doc) => {
-    if (doc.prototype === 'camera') {
-      suffix = count > 0 ? `_${count}` : '';
-      cameraheader.push({ header: `varName_photo_captured${suffix}`, key: `${doc._id}_varName_photo_captured${suffix}` });
-      cameraheader.push({ header: `varName_photo_url${suffix}`, key: `${doc._id}_varName_photo_url${suffix}` });
-      count++;
-      return ;
-    }
-  });
+  let suffix, cameraheader = [];
+  suffix = count > 0 ? `_${count}` : '';
+
+  cameraheader.push({ header: `varName_photo_captured${suffix}`, key: `${doc._id}_varName_photo_captured${suffix}` });
+  cameraheader.push({ header: `varName_photo_url${suffix}`, key: `${doc._id}_varName_photo_url${suffix}` });
+
   return cameraheader;
 }
