@@ -8,7 +8,10 @@ const nano = require('nano');
 const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 
-
+/*
+ * GET /assessment
+ * return all assessments
+ */
 exports.all = (req, res) => {
   TMP_TANGERINEDB
     .view('ojai', 'byCollection', {
@@ -20,18 +23,22 @@ exports.all = (req, res) => {
     });
 }
 
+/*
+ * GET /assessment/:id
+ * return all headers and keys for a particuler assessment
+ */
 exports.get = (req, res) => {
   let assessments = [];
   let assessmentId = req.params.id;
   let subtests;
 
   getAssessments(assessmentId)
-    .then((item) => {;
+    .then((item) => {
       assessments.push({ key: item.assessmentId + '.id', header: 'Assessment ID' });
       assessments.push({ key: item.assessmentId + '.name', header: 'Assessment Name' });
       return getSubtests(assessmentId);
     })
-    .then((subtestData) => {
+    .then(async (subtestData) => {
       subtest = subtestData;
       let subtestCounts = {
         locationCount: 0,
@@ -41,71 +48,44 @@ exports.get = (req, res) => {
         gpsCount: 0,
         cameraCount: 0
       };
-      _.each(subtestData, (data) => {
+      for (data of subtestData) {
         if (data.prototype === 'location') {
           let location = createLocation(data, subtestCounts.locationCount);
           assessments = assessments.concat(location);
           subtestCounts.locationCount++;
-          return;
         }
         if (data.prototype === 'datetime') {
           let datetime = createDatetime(data, subtestCounts.datetimeCount);
           assessments = assessments.concat(datetime);
           subtestCounts.datetimeCount++;
-          return;
         }
         if (data.prototype === 'consent') {
           let consent = createConsent(data, subtestCounts.consentCount);
           assessments = assessments.concat(consent);
           subtestCounts.consentCount++;
-          return;
         }
         if (data.prototype === 'id') {
           let id = createId(data, subtestCounts.idCount);
           assessments = assessments.concat(id);
           subtestCounts.idCount++;
-          return;
+        }
+        if (data.prototype === 'survey') {
+          let surveys = await createSurvey(data._id, subtestCounts.surveyCount);
+          assessments = assessments.concat(surveys);
+          subtestCounts.surveyCount++;
         }
         if (data.prototype === 'gps') {
           let gps = createGps(data, subtestCounts.gpsCount);
           assessments = assessments.concat(gps);
           subtestCounts.gpsCount++;
-          return;
         }
         if (data.prototype === 'camera') {
           let camera = createCamera(data, subtestCounts.cameraCount);
           assessments = assessments.concat(camera);
           subtestCounts.cameraCount++;
-          return;
-        }
-      });
-      return getQuestions(assessmentId);
-    })
-    .then(async (questionData) => {
-      let subtestQuestion = [];
-      for (let data of questionData) {
-        if (data.subtestId) {
-          let items = await getQuestionBySubtestId(data.subtestId);
-          let sortedDoc = _.sortBy(items, 'order');
-          let suffix, count = 0;
-
-          _.each(sortedDoc, (doc) => {
-            suffix = count > 0 ? `_${count}` : '';
-            for (let i = 0; i < doc.options.length; i++) {
-              let label = doc.options[i].label.trim();
-              label = label.toLowerCase().replace(/\s/g, '_');
-              subtestQuestion.push({
-                header: `${data.name}_${label}${suffix}`,
-                key: `${data.subtestId}.${data.name}.${label}${suffix}`
-              });
-            }
-            count++;
-          });
         }
       }
-      let allDoc = assessments.concat(subtestQuestion);
-
-      res.json(allDoc);
+      res.json(assessments);
     })
     .catch((err) => {
       res.json(Error(err));
@@ -174,7 +154,7 @@ function getQuestionBySubtestId(subtestId) {
         let doc = _.map(body.rows, (data) => {
           return data.doc;
         });
-       resolve(doc);
+        resolve(doc);
       });
   });
 }
@@ -229,16 +209,29 @@ function createId(doc, count) {
 }
 
 // Create survey prototype column data
-function createSurvey(doc, count) {
-  let suffix, surveyHeader = [];
-  suffix = count > 0 ? `_${count}` : '';
+async function createSurvey(id, count) {
+  let surveyHeader = [];
+  let suffix = count > 0 ? `_${count}` : '';
+  let questions = await getQuestionBySubtestId(id);
+  let sortedDoc = _.sortBy(questions, [id, 'order']);
 
-  for (i = 0; i < doc.items.length; i++) {
+  for (doc of sortedDoc) {
     surveyHeader.push({
-      header: `surveyVar-${i}${suffix}`,
-      key: `${doc._id}.surveyVar-${i}${suffix}`
+      header: `${doc.name}${suffix}`,
+      key: `${id}.${doc.name}${suffix}`
     });
+    // TODO: Use this for meta data processing in the future
+    // let i = 0;
+    // for (i; i < doc.options.length; i++) {
+    //   let label = doc.options[i].label.trim();
+    //   label = label.toLowerCase().replace(/\s/g, '_');
+    //   surveyHeader.push({
+    //     header: `${doc.name}${suffix}`,
+    //     key: `${id}.${doc.name}.${suffix}`
+    //   });
+    // }
   }
+
   return surveyHeader;
 }
 
