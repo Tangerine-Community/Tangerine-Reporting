@@ -39,6 +39,7 @@ app.get('/', function(req, res) {
 });
 
 app.get('/assessment', assessmentController.all);
+app.get('/assessment/:id', assessmentController.get);
 app.get('/assessment/datetime', resultController.getDatetime);
 app.get('/assessment/location', resultController.getLocation);
 // app.get('/assessment/questions', assessmentController.getQuestions);
