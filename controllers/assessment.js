@@ -30,24 +30,24 @@ exports.all = (req, res) => {
 exports.get = (req, res) => {
   let assessments = [];
   let assessmentId = req.params.id;
-  let subtests;
 
-  getAssessments(assessmentId)
+  getAssessment(assessmentId)
     .then((item) => {
-      assessments.push({ key: item.assessmentId + '.id', header: 'Assessment ID' });
-      assessments.push({ key: item.assessmentId + '.name', header: 'Assessment Name' });
+      assessments.push({ key: item.assessmentId + '.id', header: 'Assessment_Id' });
+      assessments.push({ key: item.assessmentId + '.name', header: 'Assessment_Name' });
       return getSubtests(assessmentId);
     })
-    .then(async (subtestData) => {
-      subtest = subtestData;
+    .then(async(subtestData) => {
       let subtestCounts = {
         locationCount: 0,
         datetimeCount: 0,
         idCount: 0,
         consentCount: 0,
         gpsCount: 0,
-        cameraCount: 0
+        cameraCount: 0,
+        gridCount: 0
       };
+
       for (data of subtestData) {
         if (data.prototype === 'location') {
           let location = createLocation(data, subtestCounts.locationCount);
@@ -74,6 +74,11 @@ exports.get = (req, res) => {
           assessments = assessments.concat(surveys);
           subtestCounts.surveyCount++;
         }
+        if (data.prototype === 'grid' && subtestCounts.gridCount < 1) {
+          let grid = await createGrid(data, subtestCounts.gridCount);
+          assessments = assessments.concat(grid);
+          subtestCounts.gridCount++;
+        }
         if (data.prototype === 'gps') {
           let gps = createGps(data, subtestCounts.gpsCount);
           assessments = assessments.concat(gps);
@@ -93,13 +98,27 @@ exports.get = (req, res) => {
 
 }
 
-// Get all assessment collection
-function getAssessments(id) {
+// Get a particular assessment collection
+function getAssessment(id) {
   return new Promise((resolve, reject) => {
     TMP_TANGERINEDB
       .get(id, { include_docs: true }, (err, body) => {
         if (err) reject(err);
         resolve(body);
+      });
+  });
+}
+
+// Get all results collection
+function getResults() {
+  return new Promise((resolve, reject) => {
+    TMP_TANGERINEDB
+      .view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
+        if (err) reject(err);
+        let doc = _.map(body.rows, (data) => {
+          return data.doc;
+        });
+        resolve(doc);
       });
   });
 }
@@ -158,7 +177,6 @@ function getQuestionBySubtestId(subtestId) {
       });
   });
 }
-
 
 // create location prototype column data
 function createLocation(doc, count) {
@@ -233,6 +251,55 @@ async function createSurvey(id, count) {
   }
 
   return surveyHeader;
+}
+
+// Create grid prototype column data
+async function createGrid(doc, count) {
+  let gridHeader = [];
+  let suffix = count > 0 ? `_${count}` : '';
+  let resultDocs = await getResults();
+  let filteredResult = _.find(resultDocs, (result) => result.assessmentId === doc.assessmentId);
+  let gridData = _.filter(filteredResult.subtestData, (val) => val.prototype === 'grid');
+
+  for (sub of gridData) {
+    let i, items = sub.data.items;
+    let variableName = sub.data.variable_name || sub.name.toLowerCase().replace(/\s/g, '_');
+
+    gridHeader.push({
+      header: `${variableName}_auto_stop${suffix}`,
+      key: `${variableName}.auto_stop${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_time_remain${suffix}`,
+      key: `${variableName}.time_remain${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_item_at_time${suffix}`,
+      key: `${variableName}.item_at_time${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_attempted${suffix}`,
+      key: `${variableName}.attempted${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_time_intermediate_captured${suffix}`,
+      key: `${variableName}.time_intermediate_captured${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_time_allowed${suffix}`,
+      key: `${variableName}.time_allowed${suffix}`
+    });
+
+    for (i = 0; i < items.length; i++) {
+      let label = items[i].itemLabel;
+      gridHeader.push({
+        header: `${variableName}_${label}${suffix}`,
+        key: `${variableName}.${label.toLowerCase()}${suffix}`
+      });
+    }
+  }
+
+  return gridHeader;
 }
 
 // Create GPS prototype column data
