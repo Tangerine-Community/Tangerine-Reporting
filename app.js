@@ -1,15 +1,12 @@
 /**
  * Module dependencies.
- */
+*/
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const logger = require('morgan');
 const chalk = require('chalk');
 const errorHandler = require('errorhandler');
-const _ = require('lodash');
-const Promise = require('bluebird');
-const Excel = require('exceljs');
 
 /**
  * Create Express server.
@@ -32,19 +29,11 @@ const resultController = require('./controllers/result');
 
 /**
  * Primary app routes
- */
-
-app.get('/', function(req, res) {
-  res.send('\n Welcome to Tangerine Reporting Service ');
-});
-
+*/
 app.get('/assessment', assessmentController.all);
 app.get('/assessment/:id', assessmentController.get);
 app.get('/assessment/datetime', resultController.getDatetime);
 app.get('/assessment/location', resultController.getLocation);
-// app.get('/assessment/questions', assessmentController.getQuestions);
-// app.get('/assessment/subtests', assessmentController.getSubtests);
-
 
 /**
  * Error Handler.

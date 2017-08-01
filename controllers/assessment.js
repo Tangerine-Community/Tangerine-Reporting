@@ -8,7 +8,7 @@ const nano = require('nano');
 const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 
-/*
+/**
  * GET /assessment
  * return all assessments
  */
@@ -23,7 +23,7 @@ exports.all = (req, res) => {
     });
 }
 
-/*
+/**
  * GET /assessment/:id
  * return all headers and keys for a particuler assessment
  */
@@ -33,8 +33,8 @@ exports.get = (req, res) => {
 
   getAssessment(assessmentId)
     .then((item) => {
-      assessments.push({ key: item.assessmentId + '.id', header: 'Assessment_Id' });
-      assessments.push({ key: item.assessmentId + '.name', header: 'Assessment_Name' });
+      assessments.push({ header: 'Assessment_Id', key: item.assessmentId + '.id' });
+      assessments.push({ header: 'Assessment_Name', key: item.assessmentId + '.name' });
       return getSubtests(assessmentId);
     })
     .then(async(subtestData) => {
@@ -90,12 +90,25 @@ exports.get = (req, res) => {
           subtestCounts.cameraCount++;
         }
       }
+      return insertDoc(assessments);
+    })
+    .then(() => {
       res.json(assessments);
     })
     .catch((err) => {
       res.json(Error(err));
     });
 
+}
+
+// Save docs into results DB
+function insertDoc(docs) {
+  return new Promise((resolve, reject) => {
+    RESULT_DB.insert({ processed: docs }, (err, body) => {
+      if (err) reject(err);
+      resolve(body);
+    });
+  });
 }
 
 // Get a particular assessment collection
