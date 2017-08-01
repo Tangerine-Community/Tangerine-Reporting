@@ -32,8 +32,8 @@ const resultController = require('./controllers/result');
 */
 app.get('/assessment', assessmentController.all);
 app.get('/assessment/:id', assessmentController.get);
-app.get('/assessment/datetime', resultController.getDatetime);
-app.get('/assessment/location', resultController.getLocation);
+app.get('/result', resultController.all);
+app.get('/result/:id', resultController.get);
 
 /**
  * Error Handler.

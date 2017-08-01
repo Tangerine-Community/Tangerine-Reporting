@@ -92,9 +92,7 @@ exports.get = (req, res) => {
       }
       return insertDoc(assessments);
     })
-    .then(() => {
-      res.json(assessments);
-    })
+    .then(() => res.json(assessments))
     .catch((err) => {
       res.json(Error(err));
     });
@@ -280,34 +278,34 @@ async function createGrid(doc, count) {
 
     gridHeader.push({
       header: `${variableName}_auto_stop${suffix}`,
-      key: `${variableName}.auto_stop${suffix}`
+      key: `${sub.subtestId}.${variableName}_auto_stop${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_time_remain${suffix}`,
-      key: `${variableName}.time_remain${suffix}`
+      key: `${sub.subtestId}.${variableName}_time_remain${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_item_at_time${suffix}`,
-      key: `${variableName}.item_at_time${suffix}`
+      key: `${sub.subtestId}.${variableName}_item_at_time${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_attempted${suffix}`,
-      key: `${variableName}.attempted${suffix}`
+      key: `${sub.subtestId}.${variableName}_attempted${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_time_intermediate_captured${suffix}`,
-      key: `${variableName}.time_intermediate_captured${suffix}`
+      key: `${sub.subtestId}.${variableName}_time_intermediate_captured${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_time_allowed${suffix}`,
-      key: `${variableName}.time_allowed${suffix}`
+      key: `${sub.subtestId}.${variableName}_time_allowed${suffix}`
     });
 
     for (i = 0; i < items.length; i++) {
       let label = items[i].itemLabel;
       gridHeader.push({
         header: `${variableName}_${label}${suffix}`,
-        key: `${variableName}.${label.toLowerCase()}${suffix}`
+        key: `${sub.subtestId}.${variableName}_${label}${suffix}`
       });
     }
   }
@@ -334,11 +332,12 @@ function createGps(doc, count) {
 
 // Create camera prototype column data
 function createCamera(data) {
-  let suffix, cameraheader = [];
-  suffix = count > 0 ? `_${count}` : '';
+  let cameraheader = [];
+  let varName = data.variableName;
+  let suffix = count > 0 ? `_${count}` : '';
 
-  cameraheader.push({ header: `varName_photo_captured${suffix}`, key: `${doc._id}.varName_photo_captured${suffix}` });
-  cameraheader.push({ header: `varName_photo_url${suffix}`, key: `${doc._id}.varName_photo_url${suffix}` });
+  cameraheader.push({ header: `${varName}_photo_captured${suffix}`, key: `${doc._id}.varName_photo_captured${suffix}` });
+  cameraheader.push({ header: `${varName}_photo_url${suffix}`, key: `${doc._id}.varName_photo_url${suffix}` });
 
   return cameraheader;
 }

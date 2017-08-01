@@ -1,332 +1,217 @@
-/**
- * Module dependencies.
- */
-
+//  Module dependencies
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
 
-/**
- * Connect to Couch DB
- */
+// Connect to Couch DB
 const nano = require('nano');
 const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 
-
-// Creates column settings for CSV generation
-function generateColumnSettings(doc) {
-  return _.map(doc, (data) => {
-    return { header: data.toUpperCase(), key: data }
-  });
-}
-
-let sampleDatetimeData = [{
-    "name": "Tanggal Penilaian ",
-    "data": {
-      "year": "2017",
-      "month": "apr",
-      "day": "4",
-      "time": "9:10"
-    },
-    "subtestHash": "QCAbEhoJSnCWrmClC2mwAD2Ziow=",
-    "subtestId": "074a96b6-8835-2e3c-6b41-e8a678d56987",
-    "prototype": "datetime",
-    "timestamp": 1491268239410
-  },
-  {
-    "name": "Mangalla Arigonna ",
-    "data": {
-      "year": "2017",
-      "month": "apr",
-      "day": "14",
-      "time": "9:48"
-    },
-    "subtestHash": "QCAbEhoJSnCWrmClC2mwAD2Ziow=",
-    "subtestId": "1aa909d2-8835-2e3c-6b41-e8a678d56987",
-    "prototype": "datetime",
-    "timestamp": 1491268239410
-  },
-  {
-    "name": "Asgard Thorain ",
-    "data": {
-      "year": "2017",
-      "month": "apr",
-      "day": "7",
-      "time": "6:48"
-    },
-    "subtestHash": "QCAbEhoJSnCWrmClC2mwAD2Ziow=",
-    "subtestId": "3c8892ad-8835-2e3c-6b41-e8a678d56987",
-    "prototype": "datetime",
-    "timestamp": 1491268239410
-  }
-]
-
-// Generate header for datetime protype subtest
-function createDatetimeHeader(data) {
-  let datetimeCount = 0;
-  let suffix;
-  let datetimeHeader = [];
-  _.forEach(data, (doc) => {
-    let index = Object.keys(doc)[0];
-    suffix = datetimeCount > 0 ? '_' + datetimeCount : '';
-    datetimeHeader.push({ header: `year${suffix}`, key: `year${suffix}` });
-    datetimeHeader.push({ header: `month${suffix}`, key: `month${suffix}` });
-    datetimeHeader.push({ header: `day${suffix}`, key: `day${suffix}` });
-    datetimeHeader.push({ header: `assess_time${suffix}`, key: `assess_time${suffix}` });
-    datetimeCount++;
-  });
-  return datetimeHeader;
-}
-
-
-// Process subtestData for datetime prototype
-function processDatetimeResult(body) {
-  let processedData = [];
-  let datetimeResult = {};
-  _.forEach(body, (doc) => {
-    datetimeResult[doc.subtestId] = {
-      year: doc.data.year,
-      month: doc.data.month,
-      day: doc.data.day,
-      assess_time: doc.data.time
-    }
-  });
-
-  return datetimeResult;
-}
-
-/*
- * GET /assessment/datetime
- * return location header and location processed results
+/**
+ * GET /result
+ * return all results collection
  */
-exports.getDatetime = (req, res) => {
-  let processed = processDatetimeResult(sampleDatetimeData);
-  let result = createDatetimeHeader(processed);
-
-  // Insert processed results into a result_db
-  RESULT_DB.insert({ processed }, function(err, body, header) {
-    if (err) res.send(err);
-    res.json({ result, processed });
-  });
+exports.all = (req, res) => {
+  TMP_TANGERINEDB
+    .view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
+      if (err) res.json(err);
+      let doc = _.map(body.rows, (data) => {
+        return data.doc;
+      });
+      res.json(doc.slice(0,10));
+    });
 }
 
-
-/*
- * PROTOTYPE = LOCATION
+/**
+ * GET /result/:id
+ * return result for a particular assessment id
  */
-let sampleLocationData = [
-  {
-    "name": "Lokasi Sekolah",
-    "data": {
-      "labels": [
-        "Propinsi's's'",
-        "Kabupaten",
-        "Code",
-        "Sekolah"
-      ],
-      "location": [
-        "South Sulawesi",
-        "Bantaeng",
-        "73K5",
-        "SDN 46 Kadangkunyi"
-      ]
-    },
-    "subtestHash": "MJPqvJDX7Erzy4A83a/jPdmKT3g=",
-    "subtestId": "68a35806-11d8-694a-8f49-86e11f0fd9ad",
-    "prototype": "location",
-    "timestamp": 1491268238404
-  },
-  {
-    "name": "Sequioa Lebanon",
-    "data": {
-      "labels": [
-        "Propinsi's's'",
-        "Kabupaten",
-        "Code",
-        "Sekolah"
-      ],
-      "location": [
-        "Yaba",
-        "Victoria Island",
-        "Ikeja",
-        "MAGODO"
-      ]
-    },
-    "subtestHash": "MJPqvJDX7Erzy4A83a/jPdmKT3g=",
-    "subtestId": "9da089af-11d8-694a-8f49-86e11f0fd9ad",
-    "prototype": "location",
-    "timestamp": 1491268238404
-  }
-];
+exports.get = (req, res) => {
+  let result = { assessmentId: req.params.id };
 
-// Generate header for location protype subtest
-function createLocationHeader(data) {
-  let locationHeader = [];
-  let count = 0;
+  getResultById(result.assessmentId)
+    .then((data) => {
+      let subtestCounts = {
+        locationCount: 0,
+        datetimeCount: 0,
+        idCount: 0,
+        consentCount: 0,
+        gpsCount: 0,
+        cameraCount: 0,
+        surveyCount: 0,
+        gridCount: 0
+      };
 
-  _.forEach(data, (item, index) => {
-    let i, propKeys = Object.keys(item);
-    for (i = 0; i < propKeys.length; i++) {
-      let suffix = count > 0 ? propKeys[i] + '_' + count : propKeys[i];
-      locationHeader.push({ header: suffix, key: `${index}_${suffix}` });
-    }
-    count++;
-  });
-  return locationHeader;
+      for (doc of data.subtestData) {
+        if (doc.prototype === 'location') {
+          let location = processLocationResult(doc, subtestCounts.locationCount);
+          result = _.assignIn(result, location);
+          subtestCounts.locationCount++;
+        }
+        if (doc.prototype === 'datetime') {
+          let datetime = processDatetimeResult(doc, subtestCounts.datetimeCount);
+          result = _.assignIn(result, datetime);
+          subtestCounts.datetimeCount++;
+        }
+        if (doc.prototype === 'consent') {
+          let consent = processConsentResult(doc, subtestCounts.consentCount);
+          result = _.assignIn(result, consent);
+          subtestCounts.consentCount++;
+        }
+        if (doc.prototype === 'id') {
+          let id = processIDResult(doc, subtestCounts.idCount);
+          result = _.assignIn(result, id);
+          subtestCounts.idCount++;
+        }
+        if (doc.prototype === 'survey') {
+          let survey = processSurveyResult(doc, subtestCounts.surveyCount);
+          result = _.assignIn(result, survey);
+          subtestCounts.surveyCount++;
+        }
+        if (doc.prototype === 'grid') {
+          let grid = processGridResult(doc, subtestCounts.gridCount);
+          result = _.assignIn(result, grid);
+          subtestCounts.gridCount++;
+        }
+        if (doc.prototype === 'gps') {
+          let gps = processGpsResult(doc, subtestCounts.gpsCount);
+          result = _.assignIn(result, gps);
+          subtestCounts.gpsCount++;
+        }
+        if (doc.prototype === 'camera') {
+          let camera = processCamera(doc, subtestCounts.cameraCount);
+          result = _.assignIn(result, camera);
+          subtestCounts.cameraCount++;
+        }
+      }
+      res.json(result);
+    })
+    .catch((err) => {
+      res.json(Error(err));
+    });
 }
 
-// Process subtestData for location prototype
-function processLocationResult(data) {
-  let locationResult = {};
-  // let
+// Get result collection by assessment id
+function getResultById(docId) {
+  return new Promise((resolve, reject) => {
+    TMP_TANGERINEDB
+      .view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
+        if (err) reject(err);
+        let doc = _.map(body.rows, (data) => {
+          return data.doc;
+        });
+        resultDoc = _.find(doc, (data) => data.assessmentId === docId);
+        resolve(resultDoc);
+      });
+  })
 
-  _.forEach(data, (subData) => {
-    let i, locData = {};
-    let labels = subData.data.labels;
-    let location = subData.data.location;
-    let subtestId = subData.subtestId;
+}
 
-    for (i = 0; i < labels.length; i++) {
-      let key = labels[i].toLowerCase();
-      locData[key] = location[i];
-    }
-    locationResult[subtestId] = locData;
-  });
+// Generate location prototype result
+function processLocationResult(body, count) {
+  let i, locationResult = {};
+  let locSuffix = count > 0 ? `_${count}` : '';
+  let labels = body.data.labels;
+  let location = body.data.location;
+  let subtestId = body.subtestId;
 
+  for (i = 0; i < labels.length; i++) {
+    let key = `${subtestId}.${labels[i]}${locSuffix}`
+    locationResult[key] = location[i];
+  }
   return locationResult;
 }
 
-/*
- * GET /assessnent/location
- * return location header and location processed results
- */
-exports.getLocation = (req, res) => {
-  let dtResult = processDatetimeResult(sampleDatetimeData);
-  let dtHeader = createDatetimeHeader(dtResult);
-
-  let locResult = processLocationResult(sampleLocationData);
-  let locHeader = createLocationHeader(locResult);
-
-  let processed = Object.assign(dtResult, locResult);
-  let colHeaders = dtHeader.concat(locHeader);
-
-  // Insert processed results into a result_db
-  // RESULT_DB.insert({ processed }, function(err, body, header) {
-  //   if (err) res.send(err);
-    generateCSV(colHeaders, processed)
-    res.json({ processed, colHeaders });
-  // });
-
-}
-
-
-/*
- * PROTOTYPE = CONSENT
- */
-let consent = {
-  "name": "Persetujuan Verbal ",
-  "data": {
-    "consent": "yes"
-  },
-  "subtestHash": "VrL1W7/LlOsR4bQlrjFhm03D0LA=",
-  "subtestId": "63404288-e1be-05f1-b1a9-8e40d060f062",
-  "prototype": "consent",
-  "timestamp": 1491268357724
-};
-
-// Create header for consent prototype
-function createConsentHeader(body) {
-  let dataKey = Object.keys(body.data);
-  return { header: dataKey[0], key: dataKey[0] }
+// Generate datetime prototype result
+function processDatetimeResult(doc, count) {
+  let suffix = count > 0 ? `_${count}` : '';
+  datetimeResult = {
+    [`${doc.subtestId}.year${suffix}`]: doc.data.year,
+    [`${doc.subtestId}.month${suffix}`]: doc.data.month,
+    [`${doc.subtestId}.day${suffix}`]: doc.data.day,
+    [`${doc.subtestId}.assess_time${suffix}`]: doc.data.time
+  }
+  return datetimeResult;
 }
 
 // Generate result for consent prototype
-function processConsentResult(body) {
-  let consentData = {};
-  let dataKey = Object.keys(body.data);
-  consentData[body.subtestId] = {
-    [dataKey[0]]: body.data.consent
+function processConsentResult(body, count) {
+  let suffix = count > 0 ? `_${count}` : '';
+  consentResult = {
+    [`${body.subtestId}.consent${suffix}`]: body.data.consent
   };
-  return consentData;
-}
-
-/*
- * PROTOTYPE = ID
- */
-let dataID = {
-  "name": "Identifikasi Siswa",
-  "data": {
-    "participant_id": "HRTKRX"
-  },
-  "subtestHash": "QV2ITfs0KhkL5xC5WmShJFq4cu0=",
-  "subtestId": "4f6fbdd4-9ef2-ac35-a880-96600b9b87f9",
-  "prototype": "id",
-  "timestamp": 1491268359431
-};
-
-// Create header for ID prototype
-function createIDHeader(body) {
-  let dataKey = Object.keys(body.data);
-  return { header: dataKey[0], key: dataKey[0] }
+  return consentResult;
 }
 
 // Generate result for ID prototype
-function processIDResult(body) {
-  let consentData = {};
-  let dataKey = Object.keys(body.data);
-  consentData[body.subtestId] = {
-    [dataKey[0]]: body.data.participant_id
+function processIDResult(body, count) {
+  let suffix = count > 0 ? `_${count}` : '';
+  idResult = {
+    [`${body.subtestId}.id${suffix}`]: body.data.participant_id
   };
-  return consentData;
-}
-
-/*
- * PROTOTYPE = SURVEY
- */
-let surveyData = {
-  "name": "Informasi Siswa",
-  "data": {
-    "stinfo1": "0",
-    "stinfo2": "0",
-    "stinfo3": "0",
-    "stinfo4": "1",
-    "stinfo5": "1",
-    "stinfo6": "1",
-    "stinfo7": "1",
-    "stinfo8": "1",
-    "stinfo9": "0"
-  },
-  "subtestHash": "9Buq5akfzWUKikYKiyrw5+dtF70=",
-  "subtestId": "862fa79a-4516-e190-5ee1-88bc42e2aeba",
-  "prototype": "survey",
-  "timestamp": 1491268446636
-};
-
-// Create header for survey prototype
-function createSurveyHeader(body) {
-  let survey = [];
-  // let keys = Object.keys(body.data)
-  // _.forEach(keys, (item, el) => {
-  console.log(body);
-
-  //   survey.push({ header: body.data[item], key: });
-  // });
-  return body;
+  return idResult;
 }
 
 // Generate result for survey prototype
-function processSurveyResult(body) {
+function processSurveyResult(body, count) {
   let surveyResult = {};
-  let surveyData = {}
-
-  _.forEach(body.data, (val, ind) => {
-    surveyData[ind] = val;
-  });
-
-  surveyResult[body.subtestId] = surveyData;
+  for (doc in body.data) {
+    surveyResult[`${body.subtestId}.${doc}`] = body.data[doc];
+  }
   return surveyResult;
 }
+
+// Generate result for grid prototype
+function processGridResult(body, count) {
+  let varName = body.data.variable_name || body.name.toLowerCase().replace(/\s/g, '_');
+  let subtestId = body.subtestId;
+  let gridResult = {};
+  let suffix = count > 0 ? `_${count}` : '';
+
+  gridResult[`${subtestId}.${varName}_auto_stop${suffix}`] = body.data.auto_stop;
+  gridResult[`${subtestId}.${varName}_time_remain${suffix}`] = body.data.time_remain;
+  gridResult[`${subtestId}.${varName}_item_at_time${suffix}`] = body.data.item_at_time;
+  gridResult[`${subtestId}.${varName}_attempted${suffix}`] = body.data.attempted;
+  gridResult[`${subtestId}.${varName}_time_intermediate_captured${suffix}`] = body.data.time_intermediate_captured$;
+  gridResult[`${subtestId}.${varName}_time_allowed${suffix}`] = body.data.time_allowed;
+
+  for (doc of body.data.items) {
+    gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = doc.itemResult;
+  }
+  return gridResult;
+}
+
+
+// Generate result for GPS prototype
+function processGpsResult(doc, count) {
+  let gpsResult = {};
+  let suffix = count > 0 ? `_${count}` : '';
+
+  gpsResult[`${doc.subtestId}.latitude${suffix}`] = doc.data.latitude;
+  gpsResult[`${doc.subtestId}.longitude${suffix}`] = doc.data.longitude;
+  gpsResult[`${doc.subtestId}.accuracy${suffix}`] = doc.data.accuracy;
+  gpsResult[`${doc.subtestId}.altitude${suffix}`] = doc.data.altitude;
+  gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altitudeAccuracy;
+  gpsResult[`${doc.subtestId}.heading${suffix}`] = doc.data.heading;
+  gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
+  gpsResult[`${doc.subtestId}.timestamp${suffix}`] = doc.data.timestamp;
+
+  return gpsResult;
+}
+
+// Generate result for Camera prototype
+function processCamera(body, count) {
+  let cameraResult = {};
+  let varName = body.data.variableName;
+  let suffix = count > 0 ? `_${count}` : '';
+
+  cameraResult[`${body.subtestId}.${varName}_photo_captured${suffix}`] = body.data.imageBase64;
+  cameraResult[`${body.subtestId}.${varName}_photo_url${suffix}`] = body.data.imageBase64;
+
+  return cameraResult;
+}
+
 
 /*
  * Ignore these functions below
@@ -442,111 +327,9 @@ function getResultCollection() {
   res.json({ subtest, simpleHeaders, deepHeaders });
 }
 
-
-/* Sample Result Schema
-  let assessment = {
-    'assessmentId': 'fadsfasdf',
-    'assessmentName': 'Pengambilan Data EGRA',
-    'subtestId_0': {
-      label_0: location_0,
-      label_1: location_1,
-      label_2: location_2,
-      label_3: location_3
-    },
-    'subtestId_1': {
-      label_0: location_0,
-      label_1: location_1,
-      label_2: location_2,
-      label_3: location_3
-    },
-    'subtestId_0': {
-      year: year,
-      month: month,
-      day: day,
-      assess_time: time
-    },
-    'subtestId_1': {
-      label_0: year,
-      label_1: month,
-      label_2: day,
-      label_3: time
-    },
-    .
-    .
-    .
-    ,
-    'subtestId': {
-      consent: 'yes'
-    },
-    'subtestId': {
-      participant_id: '92'
-    },
-    start_time: 12344555,
-    enumerator: 'mujiana'
-    tangerince_version: 0.4.7,
-    device: 'afdasdfasdfasdfsd',
-    },
-    order_map: '0,1,2,3,4,5,6,7,8',
-    instanceId: 'necd-vhga-yymg',
-    updated: 'Thu Apr 06 2017 07:45:06 GMT+0700 (WIT)',
-    fromInstanceId: 'necd-vhga-yymg',
-    editedBy: 'mujiana',
-    collection: 'result'
-
-  };
-
-
-
-let assessment = {
-    assessmentId: 'fadsfasdf',
-    assessmentName: 'Pengambilan Data EGRA',
-    // location: {
-      'substestId_0': {
-        label_0: location_0,
-        label_1: location_1,
-        label_2: location_2,
-        label_3: location_3,
-        prototype: 'location'
-      },
-      'subtestId_1': {
-        label_0: location_0,
-        label_1: location_1,
-        label_2: location_2,
-        label_3: location_3
-      },
-    // },
-    // datetime : {
-      'subtestId_0': {
-        year: year,
-        month: month,
-        day: day,
-        assess_time: time
-      },
-      'subtestId_1': {
-        label_0: year,
-        label_1: month,
-        label_2: day,
-        label_3: time
-      },
-    // },
-    // survery: {
-      'subtestId_0': {
-        stinfo1: 'value',
-        stinfo2: 'value',
-        stinfo3: 'value',
-        stinfo4: 'value'
-      },
-      'subtestId_0': {
-        read_comp1: 'value',
-        read_comp2: 'value',
-        read_comp3: 'value',
-        read_comp4: 'value'
-      },
-    },
-    order_map: '0,1,2,3,4,5,6,7,8',
-    instanceId: 'necd-vhga-yymg',
-    updated: 'Thu Apr 06 2017 07:45:06 GMT+0700 (WIT)',
-    fromInstanceId: 'necd-vhga-yymg',
-    editedBy: 'mujiana',
-  };
-*/
+// Creates column settings for CSV generation
+function generateColumnSettings(doc) {
+  return _.map(doc, (data) => {
+    return { header: data.toUpperCase(), key: data }
+  });
+}
