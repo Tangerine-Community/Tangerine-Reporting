@@ -33,8 +33,8 @@ exports.get = (req, res) => {
 
   getAssessment(assessmentId)
     .then((item) => {
-      assessments.push({ header: 'Assessment_Id', key: item.assessmentId + '.id' });
-      assessments.push({ header: 'Assessment_Name', key: item.assessmentId + '.name' });
+      assessments.push({ header: 'assessment_id', key: item.assessmentId + '.assessmentId' });
+      assessments.push({ header: 'assessment_name', key: item.assessmentId + '.assessmentName' });
       return getSubtests(assessmentId);
     })
     .then(async(subtestData) => {
@@ -90,7 +90,7 @@ exports.get = (req, res) => {
           subtestCounts.cameraCount++;
         }
       }
-      return insertDoc(assessments);
+      return insertDoc(assessments, assessmentId);
     })
     .then(() => res.json(assessments))
     .catch((err) => {
@@ -100,9 +100,9 @@ exports.get = (req, res) => {
 }
 
 // Save docs into results DB
-function insertDoc(docs) {
+function insertDoc(docs, ref) {
   return new Promise((resolve, reject) => {
-    RESULT_DB.insert({ processed: docs }, (err, body) => {
+    RESULT_DB.insert({ processed: docs }, ref, (err, body) => {
       if (err) reject(err);
       resolve(body);
     });
@@ -285,8 +285,8 @@ async function createGrid(doc, count) {
       key: `${sub.subtestId}.${variableName}_time_remain${suffix}`
     });
     gridHeader.push({
-      header: `${variableName}_item_at_time${suffix}`,
-      key: `${sub.subtestId}.${variableName}_item_at_time${suffix}`
+      header: `${variableName}_capture_item_at_time${suffix}`,
+      key: `${sub.subtestId}.${variableName}_capture_item_at_time${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_attempted${suffix}`,

@@ -28,10 +28,14 @@ exports.all = (req, res) => {
  * return result for a particular assessment id
  */
 exports.get = (req, res) => {
-  let result = { assessmentId: req.params.id };
+  let assessmentId = req.params.id;
+  let result = {};
 
-  getResultById(result.assessmentId)
+  getResultById(assessmentId)
     .then((data) => {
+      result[`${data.assessmentId}.assessmentId`] = data.assessmentId;
+      result[`${data.assessmentId}.assessmentName`] = data.assessmentName;
+
       let subtestCounts = {
         locationCount: 0,
         datetimeCount: 0,
@@ -85,11 +89,25 @@ exports.get = (req, res) => {
           subtestCounts.cameraCount++;
         }
       }
-      res.json(result);
+      return getResultHeaders(assessmentId);
+    })
+    .then((data) => {
+      let genCSV = generateCSV(data, result);
+      res.json(genCSV);
     })
     .catch((err) => {
       res.json(Error(err));
     });
+}
+
+// Get result headers from result_db
+function getResultHeaders(docId) {
+  return new Promise((resolve, reject) => {
+    RESULT_DB.get(docId, (err, body) => {
+      if (err) reject(err);
+      resolve(body);
+    });
+  });
 }
 
 // Get result collection by assessment id
@@ -171,9 +189,9 @@ function processGridResult(body, count) {
 
   gridResult[`${subtestId}.${varName}_auto_stop${suffix}`] = body.data.auto_stop;
   gridResult[`${subtestId}.${varName}_time_remain${suffix}`] = body.data.time_remain;
-  gridResult[`${subtestId}.${varName}_item_at_time${suffix}`] = body.data.item_at_time;
+  gridResult[`${subtestId}.${varName}_capture_item_at_time${suffix}`] = body.data.capture_item_at_time;
   gridResult[`${subtestId}.${varName}_attempted${suffix}`] = body.data.attempted;
-  gridResult[`${subtestId}.${varName}_time_intermediate_captured${suffix}`] = body.data.time_intermediate_captured$;
+  gridResult[`${subtestId}.${varName}_time_intermediate_captured${suffix}`] = body.data.time_intermediate_captured;
   gridResult[`${subtestId}.${varName}_time_allowed${suffix}`] = body.data.time_allowed;
 
   for (doc of body.data.items) {
@@ -181,7 +199,6 @@ function processGridResult(body, count) {
   }
   return gridResult;
 }
-
 
 // Generate result for GPS prototype
 function processGpsResult(doc, count) {
@@ -212,124 +229,32 @@ function processCamera(body, count) {
   return cameraResult;
 }
 
-
-/*
- * Ignore these functions below
- */
-
-function generateCSV(colSettings, data) {
+// Generate CSV file
+function generateCSV(colSettings, resultData) {
   let workbook = new Excel.Workbook();
   workbook.creator = 'Brockman';
-  workbook.lastModifiedBy = 'Matt';
-  workbook.created = new Date(2017, 7, 13);
+  workbook.lastModifiedBy = 'Matthew';
+  workbook.created = new Date(2017, 9, 1);
   workbook.modified = new Date();
-  workbook.lastPrinted = new Date(2017, 4, 27);
+  workbook.lastPrinted = new Date(2017, 7, 27);
 
-  let excelSheet = workbook.addWorksheet('DTLOC Sheet', {
+  let excelSheet = workbook.addWorksheet('Result Sheet', {
     views: [{ xSplit: 1 }], pageSetup: { paperSize: 9, orientation: 'landscape' }
   });
 
-  excelSheet.columns = colSettings
+  excelSheet.columns = colSettings.processed;
 
-    let count = 0, loc = 0,  allData = {};
-  _.each(data, (subData,val) => {
-    if (subData.year) {
-      let dtSuffix = count > 0 ? '_' + count : '';
-      allData[`year${dtSuffix}`] = subData.year;
-      allData[`month${dtSuffix}`] = subData.month;
-      allData[`day${dtSuffix}`] = subData.day;
-      allData[`assess_time${dtSuffix}`] = subData.assess_time;
-      count++;
-      return ;
-    }
-    _.each(subData, (item, ind) => {
-      let locSuffix = loc > 0 ? '_' + loc : '';
-      let key = `${val}_${ind}${locSuffix}`;
-      allData[key] = item;
-    });
-    loc++;
-  });
-
-  excelSheet.addRow(allData);
+  excelSheet.addRow(resultData);
 
   let creationTime = new Date().toISOString();
   let filename = `testcsvfile-${creationTime}.xlsx`;
 
   // create and fill Workbook;
   workbook.xlsx.writeFile(filename, 'utf8')
-    .then(() => console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓')))
+    .then(() => {
+      console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓'));
+    })
     .catch((err) => console.error(err));
 
-  return;
-
-}
-
-function getResultCollection() {
-  _.forEach(allData, function(data) {
-    _.filter(data.doc, function(item, index) {
-      if (typeof item === 'object') {
-        // console.log(index);
-        if (index === 'device') {
-          let deviceKey = Object.keys(item)[0];
-          deepHeaders.push({ header: deviceKey, key: deviceKey });
-        }
-        if (index === 'order_map') {
-          deepHeaders.push({ header: index, key: index });
-        }
-        if (index === 'subtestData') {
-          _.forEach(item, (subData, key) => {
-            if (subData.prototype === 'location') {
-              _.forEach(subData.data.labels, (subItem) => {
-                deepHeaders.push({ header: subItem, key: subItem });
-              });
-              return;
-            }
-            if (subData.prototype === 'datetime') {
-              datetimeSuffix = datetimeCount > 0 ? '_' + datetimeCount : '';
-              // let datetimeKey = datetimeCount > 0 ? dateIndex + datetimeSuffix : dateIndex;
-              _.forEach(subData.data, (dateData, dateIndex) => {
-                deepHeaders.push({ header: dateIndex + datetimeSuffix, key: dateIndex + datetimeSuffix });
-              });
-              datetimeCount++;
-              return;
-            }
-            if (subData.prototype === 'survey') {
-              _.forEach(subData.data, (surveyItem, surveryKey) => {
-                deepHeaders.push({ header: surveryKey, key: surveryKey });
-              });
-              return;
-            }
-            if (subData.prototype === 'grid') {
-              _.forEach(subData.data, (gridData, gridKey) => {
-                if (gridKey !== 'items') {
-                  deepHeaders.push({ header: gridKey, key: gridKey });
-                } else {
-
-                }
-              });
-            }
-            if (subData.prototype === 'complete') {
-              _.forEach(subData.data, (completeData, completeKey) => {
-                deepHeaders.push({ header: completeKey, key: completeKey });
-              });
-              return;
-            }
-          });
-        }
-      } else {
-        simpleHeaders.push({ header: index, key: index });
-      }
-    })
-  })
-  simpleHeaders = _.uniqWith(simpleHeaders, _.isEqual);
-  deepHeaders = _.uniqWith(deepHeaders, _.isEqual);
-
-  res.json({ subtest, simpleHeaders, deepHeaders });
-}
-
-// Creates column settings for CSV generation
-function generateColumnSettings(doc) {
-  return _.map(doc, (data) => {
-    return { header: data.toUpperCase(), key: data }
-  });
+  return {message: 'CSV Successfully Generated'};
 }
