@@ -35,6 +35,9 @@ exports.get = (req, res) => {
     .then((data) => {
       result[`${data.assessmentId}.assessmentId`] = data.assessmentId;
       result[`${data.assessmentId}.assessmentName`] = data.assessmentName;
+      result[`${data.assessmentId}.enumerator`] = data.enumerator;
+      result[`${data.assessmentId}.start_time`] = data.start_time;
+      result[`${data.assessmentId}.order_map`] = data.order_map.join(',');
 
       let subtestCounts = {
         locationCount: 0,
@@ -44,60 +47,84 @@ exports.get = (req, res) => {
         gpsCount: 0,
         cameraCount: 0,
         surveyCount: 0,
-        gridCount: 0
+        gridCount: 0,
+        timestampCount: 0
       };
 
       for (doc of data.subtestData) {
         if (doc.prototype === 'location') {
-          let location = processLocationResult(doc, subtestCounts.locationCount);
+          let location = processLocationResult(doc, subtestCounts);
           result = _.assignIn(result, location);
           subtestCounts.locationCount++;
+          subtestCounts.timestampCount++;
         }
         if (doc.prototype === 'datetime') {
-          let datetime = processDatetimeResult(doc, subtestCounts.datetimeCount);
+          let datetime = processDatetimeResult(doc, subtestCounts);
           result = _.assignIn(result, datetime);
           subtestCounts.datetimeCount++;
+          subtestCounts.timestampCount++;
         }
         if (doc.prototype === 'consent') {
-          let consent = processConsentResult(doc, subtestCounts.consentCount);
+          let consent = processConsentResult(doc, subtestCounts);
           result = _.assignIn(result, consent);
           subtestCounts.consentCount++;
+          subtestCounts.timestampCount++;
         }
         if (doc.prototype === 'id') {
-          let id = processIDResult(doc, subtestCounts.idCount);
+          let id = processIDResult(doc, subtestCounts);
           result = _.assignIn(result, id);
           subtestCounts.idCount++;
+          subtestCounts.timestampCount++;
         }
         if (doc.prototype === 'survey') {
-          let survey = processSurveyResult(doc, subtestCounts.surveyCount);
+          let survey = processSurveyResult(doc, subtestCounts);
           result = _.assignIn(result, survey);
           subtestCounts.surveyCount++;
+          subtestCounts.timestampCount++;
         }
         if (doc.prototype === 'grid') {
-          let grid = processGridResult(doc, subtestCounts.gridCount);
+          let grid = processGridResult(doc, subtestCounts);
           result = _.assignIn(result, grid);
           subtestCounts.gridCount++;
+          subtestCounts.timestampCount++;
         }
         if (doc.prototype === 'gps') {
-          let gps = processGpsResult(doc, subtestCounts.gpsCount);
+          let gps = processGpsResult(doc, subtestCounts);
           result = _.assignIn(result, gps);
           subtestCounts.gpsCount++;
+          subtestCounts.timestampCount++;
         }
         if (doc.prototype === 'camera') {
-          let camera = processCamera(doc, subtestCounts.cameraCount);
+          let camera = processCamera(doc, subtestCounts);
           result = _.assignIn(result, camera);
           subtestCounts.cameraCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'complete') {
+          result[`${data.assessmentId}.end_time`] = doc.data.end_time;
         }
       }
-      return getResultHeaders(assessmentId);
+      return saveResult(result, assessmentId);
     })
+    .then(() => getResultHeaders(assessmentId))
     .then((data) => {
       let genCSV = generateCSV(data, result);
-      res.json(genCSV);
+      res.json(result);
     })
     .catch((err) => {
       res.json(Error(err));
     });
+}
+
+// Save doc into result DB
+function saveResult(docs, id) {
+  let ref = `${id}-result`;
+  return new Promise((resolve, reject) => {
+    RESULT_DB.insert({ processed_results: docs }, ref, (err, body) => {
+      if (err) reject(err);
+      resolve(body);
+    });
+  });
 }
 
 // Get result headers from result_db
@@ -127,7 +154,8 @@ function getResultById(docId) {
 }
 
 // Generate location prototype result
-function processLocationResult(body, count) {
+function processLocationResult(body, subtestCounts) {
+  let count = subtestCounts.locationCount;
   let i, locationResult = {};
   let locSuffix = count > 0 ? `_${count}` : '';
   let labels = body.data.labels;
@@ -138,50 +166,62 @@ function processLocationResult(body, count) {
     let key = `${subtestId}.${labels[i]}${locSuffix}`
     locationResult[key] = location[i];
   }
+  locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.timestamp;
+
   return locationResult;
 }
 
 // Generate datetime prototype result
-function processDatetimeResult(doc, count) {
+function processDatetimeResult(doc, subtestCounts) {
+  let count = subtestCounts.datetimeCount;
   let suffix = count > 0 ? `_${count}` : '';
   datetimeResult = {
     [`${doc.subtestId}.year${suffix}`]: doc.data.year,
     [`${doc.subtestId}.month${suffix}`]: doc.data.month,
     [`${doc.subtestId}.day${suffix}`]: doc.data.day,
-    [`${doc.subtestId}.assess_time${suffix}`]: doc.data.time
+    [`${doc.subtestId}.assess_time${suffix}`]: doc.data.time,
+    [`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`]: doc.timestamp
   }
   return datetimeResult;
 }
 
 // Generate result for consent prototype
-function processConsentResult(body, count) {
+function processConsentResult(body, subtestCounts) {
+  let count = subtestCounts.consentCount;
   let suffix = count > 0 ? `_${count}` : '';
   consentResult = {
-    [`${body.subtestId}.consent${suffix}`]: body.data.consent
+    [`${body.subtestId}.consent${suffix}`]: body.data.consent,
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
   };
   return consentResult;
 }
 
 // Generate result for ID prototype
-function processIDResult(body, count) {
+function processIDResult(body, subtestCounts) {
+  let count = subtestCounts.idCount;
   let suffix = count > 0 ? `_${count}` : '';
   idResult = {
-    [`${body.subtestId}.id${suffix}`]: body.data.participant_id
+    [`${body.subtestId}.id${suffix}`]: body.data.participant_id,
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
   };
   return idResult;
 }
 
 // Generate result for survey prototype
-function processSurveyResult(body, count) {
+function processSurveyResult(body, subtestCounts) {
+  let count = subtestCounts.surveyCount;
   let surveyResult = {};
   for (doc in body.data) {
     surveyResult[`${body.subtestId}.${doc}`] = body.data[doc];
   }
+  surveyResult[`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
+
   return surveyResult;
 }
 
 // Generate result for grid prototype
-function processGridResult(body, count) {
+function processGridResult(body, subtestCounts) {
+  let count = subtestCounts.gridCount;
   let varName = body.data.variable_name || body.name.toLowerCase().replace(/\s/g, '_');
   let subtestId = body.subtestId;
   let gridResult = {};
@@ -197,11 +237,14 @@ function processGridResult(body, count) {
   for (doc of body.data.items) {
     gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = doc.itemResult;
   }
+  gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
+
   return gridResult;
 }
 
 // Generate result for GPS prototype
-function processGpsResult(doc, count) {
+function processGpsResult(doc, subtestCounts) {
+  let count = subtestCounts.gpsCount;
   let gpsResult = {};
   let suffix = count > 0 ? `_${count}` : '';
 
@@ -212,19 +255,21 @@ function processGpsResult(doc, count) {
   gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altitudeAccuracy;
   gpsResult[`${doc.subtestId}.heading${suffix}`] = doc.data.heading;
   gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
-  gpsResult[`${doc.subtestId}.timestamp${suffix}`] = doc.data.timestamp;
+  gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.data.timestamp;
 
   return gpsResult;
 }
 
 // Generate result for Camera prototype
-function processCamera(body, count) {
+function processCamera(body, subtestCounts) {
+  let count = subtestCounts.cameraCount;
   let cameraResult = {};
   let varName = body.data.variableName;
   let suffix = count > 0 ? `_${count}` : '';
 
   cameraResult[`${body.subtestId}.${varName}_photo_captured${suffix}`] = body.data.imageBase64;
   cameraResult[`${body.subtestId}.${varName}_photo_url${suffix}`] = body.data.imageBase64;
+  cameraResult[`${body.subtestId}.timestamp_${subtestsCount.timestampCount}`] = body.timestamp;
 
   return cameraResult;
 }
@@ -242,7 +287,7 @@ function generateCSV(colSettings, resultData) {
     views: [{ xSplit: 1 }], pageSetup: { paperSize: 9, orientation: 'landscape' }
   });
 
-  excelSheet.columns = colSettings.processed;
+  excelSheet.columns = colSettings.column_headers;
 
   excelSheet.addRow(resultData);
 
