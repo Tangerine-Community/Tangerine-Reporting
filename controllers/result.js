@@ -5,21 +5,19 @@ const chalk = require('chalk');
 
 // Connect to Couch DB
 const nano = require('nano');
-const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
+const TMP_TANGERINE = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
+const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
 
 /**
  * GET /result
  * return all results collection
  */
 exports.all = (req, res) => {
-  TMP_TANGERINEDB
-    .view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
+  TAYARI_BACKUP
+    .list({ limit: 100, include_docs: true }, (err, body) => {
       if (err) res.json(err);
-      let doc = _.map(body.rows, (data) => {
-        return data.doc;
-      });
-      res.json(doc.slice(0,10));
+      res.json(body.rows);
     });
 }
 
@@ -29,91 +27,103 @@ exports.all = (req, res) => {
  */
 exports.get = (req, res) => {
   let assessmentId = req.params.id;
+  generateResult(assessmentId)
+    .then((data) => {
+      res.json(data);
+    })
+    .catch((err) => res.send(Error(err)));
+}
+
+const generateResult = function(assessmentId, assessmentCount) {
   let result = {};
+  return new Promise ((resolve, reject) => {
+    getResultById(assessmentId)
+      .then((collections) => {
+        let assessmentSuffix = assessmentCount > 0 ? `_${assessmentCount}` : '';
+        for (data of collections) {
+          result[`${data.assessmentId}.assessmentId${assessmentSuffix}`] = data.assessmentId;
+          result[`${data.assessmentId}.assessmentName${assessmentSuffix}`] = data.assessmentName;
+          result[`${data.assessmentId}.enumerator${assessmentSuffix}`] = data.enumerator;
+          result[`${data.assessmentId}.start_time${assessmentSuffix}`] = data.start_time;
+          result[`${data.assessmentId}.order_map${assessmentSuffix}`] = data.order_map ? data.order_map.join(','): '';
 
-  getResultById(assessmentId)
-    .then((data) => {
-      result[`${data.assessmentId}.assessmentId`] = data.assessmentId;
-      result[`${data.assessmentId}.assessmentName`] = data.assessmentName;
-      result[`${data.assessmentId}.enumerator`] = data.enumerator;
-      result[`${data.assessmentId}.start_time`] = data.start_time;
-      result[`${data.assessmentId}.order_map`] = data.order_map.join(',');
+          let subtestCounts = {
+            locationCount: 0,
+            datetimeCount: 0,
+            idCount: 0,
+            consentCount: 0,
+            gpsCount: 0,
+            cameraCount: 0,
+            surveyCount: 0,
+            gridCount: 0,
+            timestampCount: 0
+          };
 
-      let subtestCounts = {
-        locationCount: 0,
-        datetimeCount: 0,
-        idCount: 0,
-        consentCount: 0,
-        gpsCount: 0,
-        cameraCount: 0,
-        surveyCount: 0,
-        gridCount: 0,
-        timestampCount: 0
-      };
+          for (doc of data.subtestData) {
+            if (doc.prototype === 'location') {
+              let location = processLocationResult(doc, subtestCounts);
+              result = _.assignIn(result, location);
+              subtestCounts.locationCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'datetime') {
+              let datetime = processDatetimeResult(doc, subtestCounts);
+              result = _.assignIn(result, datetime);
+              subtestCounts.datetimeCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'consent') {
+              let consent = processConsentResult(doc, subtestCounts);
+              result = _.assignIn(result, consent);
+              subtestCounts.consentCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'id') {
+              let id = processIDResult(doc, subtestCounts);
+              result = _.assignIn(result, id);
+              subtestCounts.idCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'survey') {
+              let survey = processSurveyResult(doc, subtestCounts);
+              result = _.assignIn(result, survey);
+              subtestCounts.surveyCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'grid') {
+              let grid = processGridResult(doc, subtestCounts);
+              result = _.assignIn(result, grid);
+              subtestCounts.gridCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'gps') {
+              let gps = processGpsResult(doc, subtestCounts);
+              result = _.assignIn(result, gps);
+              subtestCounts.gpsCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'camera') {
+              let camera = processCamera(doc, subtestCounts);
+              result = _.assignIn(result, camera);
+              subtestCounts.cameraCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'complete') {
+              result[`${data.assessmentId}.end_time${assessmentSuffix}`] = doc.data.end_time;
+            }
+          }
+        }
+        // return saveResult(result, assessmentId);
+        resolve(result);
 
-      for (doc of data.subtestData) {
-        if (doc.prototype === 'location') {
-          let location = processLocationResult(doc, subtestCounts);
-          result = _.assignIn(result, location);
-          subtestCounts.locationCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'datetime') {
-          let datetime = processDatetimeResult(doc, subtestCounts);
-          result = _.assignIn(result, datetime);
-          subtestCounts.datetimeCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'consent') {
-          let consent = processConsentResult(doc, subtestCounts);
-          result = _.assignIn(result, consent);
-          subtestCounts.consentCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'id') {
-          let id = processIDResult(doc, subtestCounts);
-          result = _.assignIn(result, id);
-          subtestCounts.idCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'survey') {
-          let survey = processSurveyResult(doc, subtestCounts);
-          result = _.assignIn(result, survey);
-          subtestCounts.surveyCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'grid') {
-          let grid = processGridResult(doc, subtestCounts);
-          result = _.assignIn(result, grid);
-          subtestCounts.gridCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'gps') {
-          let gps = processGpsResult(doc, subtestCounts);
-          result = _.assignIn(result, gps);
-          subtestCounts.gpsCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'camera') {
-          let camera = processCamera(doc, subtestCounts);
-          result = _.assignIn(result, camera);
-          subtestCounts.cameraCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'complete') {
-          result[`${data.assessmentId}.end_time`] = doc.data.end_time;
-        }
-      }
-      return saveResult(result, assessmentId);
-    })
-    .then(() => getResultHeaders(assessmentId))
-    .then((data) => {
-      let genCSV = generateCSV(data, result);
-      res.json(result);
-    })
-    .catch((err) => {
-      res.json(Error(err));
-    });
+      })
+      // .then(() => getResultHeaders(assessmentId))
+      // .then((data) => {
+      //   let genCSV = generateCSV(data, result);
+      //   res.json(result);
+      // })
+      .catch((err) => reject(err));
+  });
 }
 
 // Save doc into result DB
@@ -140,14 +150,12 @@ function getResultHeaders(docId) {
 // Get result collection by assessment id
 function getResultById(docId) {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
-      .view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
+    TAYARI_BACKUP
+      .view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
         if (err) reject(err);
-        let doc = _.map(body.rows, (data) => {
-          return data.doc;
-        });
-        resultDoc = _.find(doc, (data) => data.assessmentId === docId);
-        resolve(resultDoc);
+        let resultCollection = _.find(body.rows, (data) => data.doc.assessmentId === docId);
+        resultCollection = resultCollection.length ? resultCollection.doc : [resultCollection.doc];
+        resolve(resultCollection);
       });
   })
 
@@ -248,11 +256,11 @@ function processGpsResult(doc, subtestCounts) {
   let gpsResult = {};
   let suffix = count > 0 ? `_${count}` : '';
 
-  gpsResult[`${doc.subtestId}.latitude${suffix}`] = doc.data.latitude;
-  gpsResult[`${doc.subtestId}.longitude${suffix}`] = doc.data.longitude;
-  gpsResult[`${doc.subtestId}.accuracy${suffix}`] = doc.data.accuracy;
-  gpsResult[`${doc.subtestId}.altitude${suffix}`] = doc.data.altitude;
-  gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altitudeAccuracy;
+  gpsResult[`${doc.subtestId}.latitude${suffix}`] = doc.data.lat;
+  gpsResult[`${doc.subtestId}.longitude${suffix}`] = doc.data.long;
+  gpsResult[`${doc.subtestId}.altitude${suffix}`] = doc.data.alt;
+  gpsResult[`${doc.subtestId}.accuracy${suffix}`] = doc.data.acc;
+  gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altAcc;
   gpsResult[`${doc.subtestId}.heading${suffix}`] = doc.data.heading;
   gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
   gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.data.timestamp;
@@ -275,7 +283,7 @@ function processCamera(body, subtestCounts) {
 }
 
 // Generate CSV file
-function generateCSV(colSettings, resultData) {
+const generateCSV = function(colSettings, resultData) {
   let workbook = new Excel.Workbook();
   workbook.creator = 'Brockman';
   workbook.lastModifiedBy = 'Matthew';
@@ -303,3 +311,7 @@ function generateCSV(colSettings, resultData) {
 
   return {message: 'CSV Successfully Generated'};
 }
+
+exports.generateResult = generateResult;
+
+exports.generateCSV = generateCSV;

@@ -5,15 +5,16 @@ const chalk = require('chalk');
 
 // Connect to Couch DB
 const nano = require('nano');
-const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
+const TMP_TANGERINE = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
+const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
 
 /**
  * GET /assessment
  * return all assessments
  */
 exports.all = (req, res) => {
-  TMP_TANGERINEDB
+  TAYARI_BACKUP
     .view('ojai', 'byCollection', {
       key: 'assessment',
       include_docs: true
@@ -28,90 +29,103 @@ exports.all = (req, res) => {
  * return all headers and keys for a particuler assessment
  */
 exports.get = (req, res) => {
-  let assessments = [];
   let assessmentId = req.params.id;
-
-  getAssessment(assessmentId)
-    .then((item) => {
-      assessments.push({ header: 'assessment_id', key: item.assessmentId + '.assessmentId' });
-      assessments.push({ header: 'assessment_name', key: item.assessmentId + '.assessmentName' });
-      assessments.push({ header: 'enumerator', key: item.assessmentId + '.enumerator' });
-      assessments.push({ header: 'start_time', key: item.assessmentId + '.start_time' });
-      assessments.push({ header: 'order_map', key: item.assessmentId + '.order_map' });
-
-      return getSubtests(assessmentId);
+  createColumnHeaders(assessmentId)
+    .then((result) => {
+      res.json(result);
     })
-    .then(async(subtestData) => {
-      let subtestCounts = {
-        locationCount: 0,
-        datetimeCount: 0,
-        idCount: 0,
-        consentCount: 0,
-        gpsCount: 0,
-        cameraCount: 0,
-        surveyCount: 0,
-        gridCount: 0,
-        timestampCount: 0
-      };
+    .catch((err) => res.send(Error(err)));
+}
 
-      for (data of subtestData) {
-        if (data.prototype === 'location') {
-          let location = createLocation(data, subtestCounts);
-          assessments = assessments.concat(location);
-          subtestCounts.locationCount++;
-          subtestCounts.timestampCount++;
+const createColumnHeaders = function(docTypeId, count) {
+  let assessments = [];
+  return new Promise((resolve, reject) => {
+    getAssessment(docTypeId)
+      .then((item) => {
+        if (item.assessmentId) {
+          let assessmentSuffix = count > 0 ? `_${count}` : '';
+          assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${item.assessmentId}.assessmentId${assessmentSuffix}` });
+          assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${item.assessmentId}.assessmentName${assessmentSuffix}` });
+          assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${item.assessmentId}.enumerator${assessmentSuffix}` });
+          assessments.push({ header: `start_time${assessmentSuffix}`, key: `${item.assessmentId}.start_time${assessmentSuffix}` });
+          assessments.push({ header: `order_map${assessmentSuffix}`, key: `${item.assessmentId}.order_map${assessmentSuffix}` });
         }
-        if (data.prototype === 'datetime') {
-          let datetime = createDatetime(data, subtestCounts);
-          assessments = assessments.concat(datetime);
-          subtestCounts.datetimeCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'consent') {
-          let consent = createConsent(data, subtestCounts);
-          assessments = assessments.concat(consent);
-          subtestCounts.consentCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'id') {
-          let id = createId(data, subtestCounts);
-          assessments = assessments.concat(id);
-          subtestCounts.idCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'survey') {
-          let surveys = await createSurvey(data._id, subtestCounts);
-          assessments = assessments.concat(surveys);
-          subtestCounts.surveyCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'grid' && subtestCounts.gridCount < 1) {
-          let grid = await createGrid(data, subtestCounts);
-          assessments = assessments.concat(grid.gridHeader);
-          subtestCounts.gridCount++;
-          subtestCounts.timestampCount = grid.timestampCount;
-        }
-        if (data.prototype === 'gps') {
-          let gps = createGps(data, subtestCounts);
-          assessments = assessments.concat(gps);
-          subtestCounts.gpsCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'camera') {
-          let camera = createCamera(data, subtestCounts);
-          assessments = assessments.concat(camera);
-          subtestCounts.cameraCount++;
-          subtestCounts.timestampCount++;
-        }
-      }
-      assessments.push({ header: `end_time`, key: `${assessmentId}.end_time` });
 
-      return insertDoc(assessments, assessmentId);
-    })
-    .then(() => res.json(assessments))
-    .catch((err) => {
-      res.json(Error(err));
-    });
+        return getSubtests(docTypeId);
+      })
+      .then(async(subtestData) => {
+        let subtestCounts = {
+          locationCount: 0,
+          datetimeCount: 0,
+          idCount: 0,
+          consentCount: 0,
+          gpsCount: 0,
+          cameraCount: 0,
+          surveyCount: 0,
+          gridCount: 0,
+          timestampCount: 0
+        };
+
+        for (data of subtestData) {
+          if (data.prototype === 'location') {
+            let location = createLocation(data, subtestCounts);
+            assessments = assessments.concat(location);
+            subtestCounts.locationCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'datetime') {
+            let datetime = createDatetime(data, subtestCounts);
+            assessments = assessments.concat(datetime);
+            subtestCounts.datetimeCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'consent') {
+            let consent = createConsent(data, subtestCounts);
+            assessments = assessments.concat(consent);
+            subtestCounts.consentCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'id') {
+            let id = createId(data, subtestCounts);
+            assessments = assessments.concat(id);
+            subtestCounts.idCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'survey') {
+            let surveys = await createSurvey(data._id, subtestCounts);
+            assessments = assessments.concat(surveys);
+            subtestCounts.surveyCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'grid' && subtestCounts.gridCount < 1) {
+            let grid = await createGrid(data, subtestCounts);
+            assessments = assessments.concat(grid.gridHeader);
+            subtestCounts.gridCount++;
+            subtestCounts.timestampCount = grid.timestampCount;
+          }
+          if (data.prototype === 'gps') {
+            let gps = createGps(data, subtestCounts);
+            assessments = assessments.concat(gps);
+            subtestCounts.gpsCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'camera') {
+            let camera = createCamera(data, subtestCounts);
+            assessments = assessments.concat(camera);
+            subtestCounts.cameraCount++;
+            subtestCounts.timestampCount++;
+          }
+        }
+
+        let assessmentSuffix = count > 0 ? `_${count}` : '';
+        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docTypeId}.end_time${assessmentSuffix}` });
+
+        // return insertDoc(assessments, assessmentId);
+        resolve(assessments);
+      })
+      // .then(() => resolve(assessments))
+      .catch((err) => reject(err));
+  });
 
 }
 
@@ -128,7 +142,7 @@ function insertDoc(docs, ref) {
 // Get a particular assessment collection
 function getAssessment(id) {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
+    TAYARI_BACKUP
       .get(id, { include_docs: true }, (err, body) => {
         if (err) reject(err);
         resolve(body);
@@ -139,8 +153,8 @@ function getAssessment(id) {
 // Get all results collection
 function getResults() {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
-      .view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
+    TAYARI_BACKUP
+      .view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
         if (err) reject(err);
         let doc = _.map(body.rows, (data) => {
           return data.doc;
@@ -153,9 +167,10 @@ function getResults() {
 // Get all subtest collection
 function getSubtests(id) {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
+    TAYARI_BACKUP
       .view('ojai', 'subtestsByAssessmentId', {
         key: id,
+        limit: 100,
         include_docs: true
       }, (err, body) => {
         if (err) reject(err);
@@ -172,9 +187,10 @@ function getSubtests(id) {
 // Get all question collection
 function getQuestions(id) {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
+    TAYARI_BACKUP
       .view('ojai', 'questionsByParentId', {
         key: id,
+        limit: 100,
         include_docs: true
       }, (err, body) => {
         if (err) reject(err);
@@ -191,9 +207,10 @@ function getQuestions(id) {
 // Get all questions associated with a particular subtest
 function getQuestionBySubtestId(subtestId) {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
+    TAYARI_BACKUP
       .view('ojai', 'questionsByParentId', {
         key: subtestId,
+        limit: 100,
         include_docs: true
       }, (err, body) => {
         if (err) reject(err);
@@ -302,50 +319,63 @@ async function createGrid(doc, subtestCounts) {
   let gridHeader = [];
   let suffix = count > 0 ? `_${count}` : '';
   let resultDocs = await getResults();
-  let filteredResult = _.find(resultDocs, (result) => result.assessmentId === doc.assessmentId);
-  let gridData = _.filter(filteredResult.subtestData, (val) => val.prototype === 'grid');
+  let docId = doc.assessmentId || doc.curriculumId;
 
-  for (sub of gridData) {
-    let i, items = sub.data.items;
-    let variableName = sub.data.variable_name || sub.name.toLowerCase().replace(/\s/g, '_');
+  let gridData = _.filter(resultDocs, (result) => result.assessmentId === docId);
 
-    gridHeader.push({
-      header: `${variableName}_auto_stop${suffix}`,
-      key: `${sub.subtestId}.${variableName}_auto_stop${suffix}`
-    });
-    gridHeader.push({
-      header: `${variableName}_time_remain${suffix}`,
-      key: `${sub.subtestId}.${variableName}_time_remain${suffix}`
-    });
-    gridHeader.push({
-      header: `${variableName}_capture_item_at_time${suffix}`,
-      key: `${sub.subtestId}.${variableName}_capture_item_at_time${suffix}`
-    });
-    gridHeader.push({
-      header: `${variableName}_attempted${suffix}`,
-      key: `${sub.subtestId}.${variableName}_attempted${suffix}`
-    });
-    gridHeader.push({
-      header: `${variableName}_time_intermediate_captured${suffix}`,
-      key: `${sub.subtestId}.${variableName}_time_intermediate_captured${suffix}`
-    });
-    gridHeader.push({
-      header: `${variableName}_time_allowed${suffix}`,
-      key: `${sub.subtestId}.${variableName}_time_allowed${suffix}`
-    });
+  // TODO: cater for one doc
+  // let gridData = [];
+  // _.each(filteredResult, (item) => {
+  //   _.filter(item.subtestData, (val) => {
+  //     if(val.prototype === 'grid') {
+  //       gridData.push(val);
+  //     }
+  //   });
+  // });
 
-    for (i = 0; i < items.length; i++) {
-      let label = items[i].itemLabel;
+  for (items of gridData) {
+    for (sub of items.subtestData) {
+      let i, items = sub.data.items;
+      let variableName = sub.data.variable_name || sub.name.toLowerCase().replace(/\s/g, '_');
+
       gridHeader.push({
-        header: `${variableName}_${label}${suffix}`,
-        key: `${sub.subtestId}.${variableName}_${label}${suffix}`
+        header: `${variableName}_auto_stop${suffix}`,
+        key: `${sub.subtestId}.${variableName}_auto_stop${suffix}`
       });
+      gridHeader.push({
+        header: `${variableName}_time_remain${suffix}`,
+        key: `${sub.subtestId}.${variableName}_time_remain${suffix}`
+      });
+      gridHeader.push({
+        header: `${variableName}_capture_item_at_time${suffix}`,
+        key: `${sub.subtestId}.${variableName}_capture_item_at_time${suffix}`
+      });
+      gridHeader.push({
+        header: `${variableName}_attempted${suffix}`,
+        key: `${sub.subtestId}.${variableName}_attempted${suffix}`
+      });
+      gridHeader.push({
+        header: `${variableName}_time_intermediate_captured${suffix}`,
+        key: `${sub.subtestId}.${variableName}_time_intermediate_captured${suffix}`
+      });
+      gridHeader.push({
+        header: `${variableName}_time_allowed${suffix}`,
+        key: `${sub.subtestId}.${variableName}_time_allowed${suffix}`
+      });
+
+      for (i = 0; i < items.length; i++) {
+        let label = items[i].itemLabel;
+        gridHeader.push({
+          header: `${variableName}_${label}${suffix}`,
+          key: `${sub.subtestId}.${variableName}_${label}${suffix}`
+        });
+      }
+      gridHeader.push({
+        header: `timestamp_${subtestCounts.timestampCount}`,
+        key: `${sub.subtestId}.timestamp_${subtestCounts.timestampCount}`
+      });
+      subtestCounts.timestampCount++;
     }
-    gridHeader.push({
-      header: `timestamp_${subtestCounts.timestampCount}`,
-      key: `${sub.subtestId}.timestamp_${subtestCounts.timestampCount}`
-    });
-    subtestCounts.timestampCount++;
   }
 
   return { gridHeader, timestampCount: subtestCounts.timestampCount };
@@ -382,3 +412,6 @@ function createCamera(doc, subtestCounts) {
 
   return cameraheader;
 }
+
+
+exports.createColumnHeaders = createColumnHeaders;
