@@ -97,7 +97,9 @@ const createColumnHeaders = function(docTypeId, count) {
             subtestCounts.surveyCount++;
             subtestCounts.timestampCount++;
           }
-          if (data.prototype === 'grid' && subtestCounts.gridCount < 1) {
+          // TODO: Remove this comment when you confirm data difference based on tangerine version
+          // if (data.prototype === 'grid' && subtestCounts.gridCount < 1) {
+          if (data.prototype === 'grid') {
             let grid = await createGrid(data, subtestCounts);
             assessments = assessments.concat(grid.gridHeader);
             subtestCounts.gridCount++;
@@ -120,17 +122,17 @@ const createColumnHeaders = function(docTypeId, count) {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
         assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docTypeId}.end_time${assessmentSuffix}` });
 
-        // return insertDoc(assessments, assessmentId);
+        // Save headers in Result DB
+        // await saveHeaders(assessments, assessmentId);
         resolve(assessments);
       })
-      // .then(() => resolve(assessments))
       .catch((err) => reject(err));
   });
 
 }
 
 // Save docs into results DB
-function insertDoc(docs, ref) {
+const saveHeaders = function(docs, ref) {
   return new Promise((resolve, reject) => {
     RESULT_DB.insert({ column_headers: docs }, ref, (err, body) => {
       if (err) reject(err);
@@ -413,5 +415,6 @@ function createCamera(doc, subtestCounts) {
   return cameraheader;
 }
 
-
 exports.createColumnHeaders = createColumnHeaders;
+
+exports.saveHeaders = saveHeaders;

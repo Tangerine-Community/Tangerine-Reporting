@@ -1,17 +1,16 @@
 // Module dependencies.
 const _ = require('lodash');
-const chalk = require('chalk');
 
 // Connect to Couch DB
 const nano = require('nano');
 const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
-const TAYARI_SUMMARY = nano('http://localhost:5984/tayari_summary');
-const DEMO = nano('http://admin:t4ngerines33d@demo.tangerinecentral.com/group-mel_100');
 
 const createHeaders = require('./assessment').createColumnHeaders;
+const saveHeaders = require('./assessment').saveHeaders;
 const processResult = require('./result').generateResult;
+const saveResult = require('./result').saveResult;
 
 /**
  * GET /workflow
@@ -28,7 +27,6 @@ exports.all = (req, res) => {
     });
 }
 
-
 /**
  * GET /assessment/:id
  * return all headers and keys for a particular assessment
@@ -43,15 +41,17 @@ exports.get = (req, res) => {
 }
 
 // Create workflow headers and workflow results
-const createWorkflow = function(id) {
+const createWorkflow = function(docId) {
+  let workflowHeaders = [];
+  let workflowResults = {};
+
   return new Promise ((resolve, reject) => {
-    getWorkflowById(id)
+    getWorkflowById(docId)
       .then(async(data) => {
-        let workflowHeaders = [];
-        let workflowResults = {};
         let workflowCounts = {
           assessmentCount: 0,
-          curriculumCount: 0
+          curriculumCount: 0,
+          messageCount: 0
         };
 
         for (item of data.children) {
@@ -64,14 +64,24 @@ const createWorkflow = function(id) {
           }
           if (item.type === 'curriculum') {
             let curriculumHeaders = await createHeaders(item.typesId, workflowCounts.curriculumCount);
-            // let curriculumResults = await processResult(item.typesId, workflowCounts.curriculumCount);
+            let curriculumResults = await processResult(item.typesId, workflowCounts.curriculumCount);
             workflowHeaders.push(curriculumHeaders);
-            // workflowResults = _.assignIn(workflowResults, curriculumResults);
+            workflowResults = _.assignIn(workflowResults, curriculumResults);
             workflowCounts.curriculumCount++;
+          }
+          if (item.type === 'message') {
+            let messageSuffix = workflowCounts.messageCount > 0 ? `_${workflowCounts.messageCount}` : '';
+            workflowHeaders.push({ headers: `${docId}_message${messageSuffix}`, key: `${docId}.message${messageSuffix}`});
+            let messageKey = `${docId}.message${messageSuffix}`;
+            workflowResults = _.assignIn(workflowResults, { [messageKey]: item.message });
+            workflowCounts.messageCount++;
           }
         }
         workflowHeaders = _.flatten(workflowHeaders);
-        // resolve({ workflowCounts });
+
+        await saveHeaders(workflowHeaders, docId);  // Save headers
+        await saveResult(workflowResults, docId);   // Save processed results
+
         resolve({ workflowHeaders, workflowResults });
       })
       .catch((err) => reject(err));
@@ -94,9 +104,9 @@ function getAllWorkflow(docId) {
 }
 
 // Retrieve a particular workflow collection
-function getWorkflowById(id) {
+function getWorkflowById(docId) {
   return new Promise ((resolve, reject) => {
-    TAYARI_BACKUP.get(id, (err, body) => {
+    TAYARI_BACKUP.get(docId, (err, body) => {
       if (err) reject(err);
       resolve(body)
     });

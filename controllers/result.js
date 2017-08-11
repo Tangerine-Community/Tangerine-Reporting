@@ -34,18 +34,20 @@ exports.get = (req, res) => {
     .catch((err) => res.send(Error(err)));
 }
 
-const generateResult = function(assessmentId, assessmentCount) {
+const generateResult = function(docId, count) {
   let result = {};
   return new Promise ((resolve, reject) => {
-    getResultById(assessmentId)
+    getResultById(docId, count)
       .then((collections) => {
-        let assessmentSuffix = assessmentCount > 0 ? `_${assessmentCount}` : '';
+        let assessmentSuffix = count > 0 ? `_${count}` : '';
+        result.result_id = docId;
+
         for (data of collections) {
           result[`${data.assessmentId}.assessmentId${assessmentSuffix}`] = data.assessmentId;
           result[`${data.assessmentId}.assessmentName${assessmentSuffix}`] = data.assessmentName;
           result[`${data.assessmentId}.enumerator${assessmentSuffix}`] = data.enumerator;
           result[`${data.assessmentId}.start_time${assessmentSuffix}`] = data.start_time;
-          result[`${data.assessmentId}.order_map${assessmentSuffix}`] = data.order_map ? data.order_map.join(','): '';
+          result[`${data.assessmentId}.order_map${assessmentSuffix}`] = data.order_map ? data.order_map.join(',') : '';
 
           let subtestCounts = {
             locationCount: 0,
@@ -113,21 +115,14 @@ const generateResult = function(assessmentId, assessmentCount) {
             }
           }
         }
-        // return saveResult(result, assessmentId);
         resolve(result);
-
       })
-      // .then(() => getResultHeaders(assessmentId))
-      // .then((data) => {
-      //   let genCSV = generateCSV(data, result);
-      //   res.json(result);
-      // })
       .catch((err) => reject(err));
   });
 }
 
 // Save doc into result DB
-function saveResult(docs, id) {
+const saveResult = function(docs, id) {
   let ref = `${id}-result`;
   return new Promise((resolve, reject) => {
     RESULT_DB.insert({ processed_results: docs }, ref, (err, body) => {
@@ -137,24 +132,20 @@ function saveResult(docs, id) {
   });
 }
 
-// Get result headers from result_db
-function getResultHeaders(docId) {
-  return new Promise((resolve, reject) => {
-    RESULT_DB.get(docId, (err, body) => {
-      if (err) reject(err);
-      resolve(body);
-    });
-  });
-}
+
 
 // Get result collection by assessment id
-function getResultById(docId) {
+function getResultById(docId, count) {
   return new Promise((resolve, reject) => {
     TAYARI_BACKUP
       .view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
         if (err) reject(err);
-        let resultCollection = _.find(body.rows, (data) => data.doc.assessmentId === docId);
-        resultCollection = resultCollection.length ? resultCollection.doc : [resultCollection.doc];
+        let resultCollection = [];
+        _.filter(body.rows, (data) => {
+          if (data.doc.assessmentId === docId) {
+            resultCollection.push(data.doc);
+          }
+        });
         resolve(resultCollection);
       });
   })
@@ -282,36 +273,6 @@ function processCamera(body, subtestCounts) {
   return cameraResult;
 }
 
-// Generate CSV file
-const generateCSV = function(colSettings, resultData) {
-  let workbook = new Excel.Workbook();
-  workbook.creator = 'Brockman';
-  workbook.lastModifiedBy = 'Matthew';
-  workbook.created = new Date(2017, 9, 1);
-  workbook.modified = new Date();
-  workbook.lastPrinted = new Date(2017, 7, 27);
-
-  let excelSheet = workbook.addWorksheet('Result Sheet', {
-    views: [{ xSplit: 1 }], pageSetup: { paperSize: 9, orientation: 'landscape' }
-  });
-
-  excelSheet.columns = colSettings.column_headers;
-
-  excelSheet.addRow(resultData);
-
-  let creationTime = new Date().toISOString();
-  let filename = `testcsvfile-${creationTime}.xlsx`;
-
-  // create and fill Workbook;
-  workbook.xlsx.writeFile(filename, 'utf8')
-    .then(() => {
-      console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓'));
-    })
-    .catch((err) => console.error(err));
-
-  return {message: 'CSV Successfully Generated'};
-}
-
 exports.generateResult = generateResult;
 
-exports.generateCSV = generateCSV;
+exports.saveResult = saveResult;

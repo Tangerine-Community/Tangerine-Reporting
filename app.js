@@ -18,6 +18,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 const assessmentController = require('./controllers/assessment');
 const resultController = require('./controllers/result');
 const workflowController = require('./controllers/workflow');
+const csvController = require('./controllers/generate_csv');
 
 // Primary app routes
 app.get('/assessment', assessmentController.all);
@@ -26,6 +27,7 @@ app.get('/result', resultController.all);
 app.get('/result/:id', resultController.get);
 app.get('/workflow', workflowController.all);
 app.get('/workflow/:id', workflowController.get);
+app.get('/generate/:id', csvController.generate);
 
 // Error Handler
 app.use(errorHandler());
