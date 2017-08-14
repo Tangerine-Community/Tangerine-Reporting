@@ -1,6 +1,7 @@
 // Module dependencies.
 const _ = require('lodash');
 const chalk = require('chalk');
+const Excel = require('exceljs');
 
 // Connect to Couch DB
 const nano = require('nano');
@@ -9,7 +10,6 @@ const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
 
 const createHeaders = require('./assessment').createColumnHeaders;
 const processResult = require('./result').generateResult;
-
 
 exports.generate = (req, res) => {
   let docHeaders;
@@ -46,13 +46,13 @@ const generateCSV = function(colSettings, resultData) {
   workbook.modified = new Date();
   workbook.lastPrinted = new Date(2017, 7, 27);
 
-  let excelSheet = workbook.addWorksheet('Result Sheet', {
+  let excelSheet = workbook.addWorksheet('Workflow Sheet', {
     views: [{ xSplit: 1 }], pageSetup: { paperSize: 9, orientation: 'landscape' }
   });
 
   excelSheet.columns = colSettings.column_headers;
 
-  excelSheet.addRow(resultData);
+  excelSheet.addRow(resultData.processed_results);
 
   let creationTime = new Date().toISOString();
   let filename = `testcsvfile-${creationTime}.xlsx`;

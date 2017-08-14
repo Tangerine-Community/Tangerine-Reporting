@@ -210,8 +210,17 @@ function processIDResult(body, subtestCounts) {
 function processSurveyResult(body, subtestCounts) {
   let count = subtestCounts.surveyCount;
   let surveyResult = {};
+  
   for (doc in body.data) {
-    surveyResult[`${body.subtestId}.${doc}`] = body.data[doc];
+    if (typeof body.data[doc] === 'object') {
+      for (item in body.data[doc]) {
+        let key = body.data[doc][item];
+        let value = (key === 'checked') ? '1' : '0';
+        surveyResult[`${body.subtestId}.${doc}.${item}`] = value;
+      }
+    } else {
+      surveyResult[`${body.subtestId}.${doc}`] = body.data[doc];
+    }
   }
   surveyResult[`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
 

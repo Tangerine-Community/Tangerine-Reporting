@@ -71,7 +71,7 @@ const createWorkflow = function(docId) {
           }
           if (item.type === 'message') {
             let messageSuffix = workflowCounts.messageCount > 0 ? `_${workflowCounts.messageCount}` : '';
-            workflowHeaders.push({ headers: `${docId}_message${messageSuffix}`, key: `${docId}.message${messageSuffix}`});
+            workflowHeaders.push({ headers: `message${messageSuffix}`, key: `${docId}.message${messageSuffix}`});
             let messageKey = `${docId}.message${messageSuffix}`;
             workflowResults = _.assignIn(workflowResults, { [messageKey]: item.message });
             workflowCounts.messageCount++;

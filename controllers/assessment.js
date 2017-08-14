@@ -292,20 +292,22 @@ async function createSurvey(id, subtestCounts) {
   let sortedDoc = _.sortBy(questions, [id, 'order']);
 
   for (doc of sortedDoc) {
-    surveyHeader.push({
-      header: `${doc.name}${suffix}`,
-      key: `${id}.${doc.name}${suffix}`
-    });
-    // TODO: Use this for meta data processing in the future
-    // let i = 0;
-    // for (i; i < doc.options.length; i++) {
-    //   let label = doc.options[i].label.trim();
-    //   label = label.toLowerCase().replace(/\s/g, '_');
-    //   surveyHeader.push({
-    //     header: `${doc.name}${suffix}`,
-    //     key: `${id}.${doc.name}.${suffix}`
-    //   });
-    // }
+    let optionsLen = doc.options.length;
+    if (optionsLen <= 2) {
+      surveyHeader.push({
+        header: `${doc.name}${suffix}`,
+        key: `${id}.${doc.name}${suffix}`
+      });
+    }
+    else {
+      let i = 1;
+      for (i; i <= optionsLen; i++) {
+        surveyHeader.push({
+          header: `${doc.name}_${i}${suffix}`,
+          key: `${id}.${doc.name}.${i}${suffix}`
+        });
+      }
+    }
   }
   surveyHeader.push({
     header: `timestamp_${subtestCounts.timestampCount}`,
