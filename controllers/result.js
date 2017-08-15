@@ -9,6 +9,22 @@ const TMP_TANGERINE = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
 
+gridValueMap = {
+  'correct': '1',
+  'incorrect': '0',
+  'missing': '.',
+  'skipped': '999',
+  'logicSkipped': '999'
+}
+
+surveyValueMap = {
+  'checked': '1',
+  'unchecked': '0',
+  'not asked' : '.' ,
+  'skipped': '999',
+  'logicSkipped': '999'
+}
+
 /**
  * GET /result
  * return all results collection
@@ -132,8 +148,6 @@ const saveResult = function(docs, id) {
   });
 }
 
-
-
 // Get result collection by assessment id
 function getResultById(docId, count) {
   return new Promise((resolve, reject) => {
@@ -210,16 +224,16 @@ function processIDResult(body, subtestCounts) {
 function processSurveyResult(body, subtestCounts) {
   let count = subtestCounts.surveyCount;
   let surveyResult = {};
-  
+
   for (doc in body.data) {
     if (typeof body.data[doc] === 'object') {
       for (item in body.data[doc]) {
-        let key = body.data[doc][item];
-        let value = (key === 'checked') ? '1' : '0';
-        surveyResult[`${body.subtestId}.${doc}.${item}`] = value;
+        let surveyValue = translateSurveyValue(body.data[doc][item]);
+        surveyResult[`${body.subtestId}.${doc}.${item}`] = surveyValue;
       }
     } else {
-      surveyResult[`${body.subtestId}.${doc}`] = body.data[doc];
+      let value = translateSurveyValue(body.data[doc]);
+      surveyResult[`${body.subtestId}.${doc}`] = value;
     }
   }
   surveyResult[`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
@@ -243,7 +257,8 @@ function processGridResult(body, subtestCounts) {
   gridResult[`${subtestId}.${varName}_time_allowed${suffix}`] = body.data.time_allowed;
 
   for (doc of body.data.items) {
-    gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = doc.itemResult;
+    let gridValue = translateGridValue(doc.itemResult);
+    gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = gridValue;
   }
   gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
 
@@ -281,6 +296,20 @@ function processCamera(body, subtestCounts) {
 
   return cameraResult;
 }
+
+translateSurveyValue = function(databaseValue) {
+  if (databaseValue == null) {
+    databaseValue = 'no_record';
+  }
+  return surveyValueMap[databaseValue] || String(databaseValue);
+};
+
+translateGridValue = function(databaseValue) {
+  if (databaseValue == null) {
+    databaseValue = 'no_record';
+  }
+  return gridValueMap[databaseValue] || String(databaseValue);
+};
 
 exports.generateResult = generateResult;
 

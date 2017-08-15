@@ -11,6 +11,10 @@ const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
 const createHeaders = require('./assessment').createColumnHeaders;
 const processResult = require('./result').generateResult;
 
+/**
+ * GET /generate/:id
+ * generate csv for a particular workflow id
+*/
 exports.generate = (req, res) => {
   let docHeaders;
   let docId = req.params.id;
