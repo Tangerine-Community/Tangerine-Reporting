@@ -50,7 +50,6 @@ const createColumnHeaders = function(docTypeId, count) {
           assessments.push({ header: `start_time${assessmentSuffix}`, key: `${item.assessmentId}.start_time${assessmentSuffix}` });
           assessments.push({ header: `order_map${assessmentSuffix}`, key: `${item.assessmentId}.order_map${assessmentSuffix}` });
         }
-
         return getSubtests(docTypeId);
       })
       .then(async(subtestData) => {
@@ -97,8 +96,6 @@ const createColumnHeaders = function(docTypeId, count) {
             subtestCounts.surveyCount++;
             subtestCounts.timestampCount++;
           }
-          // TODO: Remove this comment when you confirm data difference based on tangerine version
-          // if (data.prototype === 'grid' && subtestCounts.gridCount < 1) {
           if (data.prototype === 'grid') {
             let grid = await createGrid(data, subtestCounts);
             assessments = assessments.concat(grid.gridHeader);
@@ -144,11 +141,10 @@ const saveHeaders = function(docs, ref) {
 // Get a particular assessment collection
 function getAssessment(id) {
   return new Promise((resolve, reject) => {
-    TAYARI_BACKUP
-      .get(id, { include_docs: true }, (err, body) => {
-        if (err) reject(err);
-        resolve(body);
-      });
+    TAYARI_BACKUP.get(id, { include_docs: true }, (err, body) => {
+      if (err) reject(err);
+      resolve(body);
+    });
   });
 }
 
@@ -229,6 +225,7 @@ function createLocation(doc, subtestCounts) {
   let count = subtestCounts.locationCount;
   let locationHeader = [];
   let labels = doc.locationCols;
+
   for (i = 0; i < labels.length; i++) {
     let locSuffix = count > 0 ? `_${count}` : '';
     locationHeader.push({
@@ -321,65 +318,62 @@ async function createSurvey(id, subtestCounts) {
 async function createGrid(doc, subtestCounts) {
   let count = subtestCounts.gridCount;
   let gridHeader = [];
+  let gridData = [];
   let suffix = count > 0 ? `_${count}` : '';
   let resultDocs = await getResults();
   let docId = doc.assessmentId || doc.curriculumId;
 
-  let gridData = _.filter(resultDocs, (result) => result.assessmentId === docId);
+  let filteredResult = _.filter(resultDocs, (result) => result.assessmentId === docId);
 
-  // TODO: cater for one doc
-  // let gridData = [];
-  // _.each(filteredResult, (item) => {
-  //   _.filter(item.subtestData, (val) => {
-  //     if(val.prototype === 'grid') {
-  //       gridData.push(val);
-  //     }
-  //   });
-  // });
-
-  for (items of gridData) {
-    for (sub of items.subtestData) {
-      let i, items = sub.data.items;
-      let variableName = sub.data.variable_name || sub.name.toLowerCase().replace(/\s/g, '_');
-
-      gridHeader.push({
-        header: `${variableName}_auto_stop${suffix}`,
-        key: `${sub.subtestId}.${variableName}_auto_stop${suffix}`
-      });
-      gridHeader.push({
-        header: `${variableName}_time_remain${suffix}`,
-        key: `${sub.subtestId}.${variableName}_time_remain${suffix}`
-      });
-      gridHeader.push({
-        header: `${variableName}_capture_item_at_time${suffix}`,
-        key: `${sub.subtestId}.${variableName}_capture_item_at_time${suffix}`
-      });
-      gridHeader.push({
-        header: `${variableName}_attempted${suffix}`,
-        key: `${sub.subtestId}.${variableName}_attempted${suffix}`
-      });
-      gridHeader.push({
-        header: `${variableName}_time_intermediate_captured${suffix}`,
-        key: `${sub.subtestId}.${variableName}_time_intermediate_captured${suffix}`
-      });
-      gridHeader.push({
-        header: `${variableName}_time_allowed${suffix}`,
-        key: `${sub.subtestId}.${variableName}_time_allowed${suffix}`
-      });
-
-      for (i = 0; i < items.length; i++) {
-        let label = items[i].itemLabel;
-        gridHeader.push({
-          header: `${variableName}_${label}${suffix}`,
-          key: `${sub.subtestId}.${variableName}_${label}${suffix}`
-        });
+  _.each(filteredResult, (item) => {
+    _.filter(item.subtestData, (value) => {
+      if(value.prototype === 'grid') {
+        gridData.push(value);
       }
+    });
+  });
+
+  for (sub of gridData) {
+    let i; items = sub.data.items;
+    let variableName = sub.data.variable_name || sub.name.toLowerCase().replace(/\s/g, '_');
+
+    gridHeader.push({
+      header: `${variableName}_auto_stop${suffix}`,
+      key: `${sub.subtestId}.${variableName}_auto_stop${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_time_remain${suffix}`,
+      key: `${sub.subtestId}.${variableName}_time_remain${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_capture_item_at_time${suffix}`,
+      key: `${sub.subtestId}.${variableName}_capture_item_at_time${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_attempted${suffix}`,
+      key: `${sub.subtestId}.${variableName}_attempted${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_time_intermediate_captured${suffix}`,
+      key: `${sub.subtestId}.${variableName}_time_intermediate_captured${suffix}`
+    });
+    gridHeader.push({
+      header: `${variableName}_time_allowed${suffix}`,
+      key: `${sub.subtestId}.${variableName}_time_allowed${suffix}`
+    });
+
+    for (i = 0; i < items.length; i++) {
+      let label = items[i].itemLabel;
       gridHeader.push({
-        header: `timestamp_${subtestCounts.timestampCount}`,
-        key: `${sub.subtestId}.timestamp_${subtestCounts.timestampCount}`
+        header: `${variableName}_${label}${suffix}`,
+        key: `${sub.subtestId}.${variableName}_${label}${suffix}`
       });
-      subtestCounts.timestampCount++;
     }
+    gridHeader.push({
+      header: `timestamp_${subtestCounts.timestampCount}`,
+      key: `${sub.subtestId}.timestamp_${subtestCounts.timestampCount}`
+    });
+    subtestCounts.timestampCount++;
   }
 
   return { gridHeader, timestampCount: subtestCounts.timestampCount };
