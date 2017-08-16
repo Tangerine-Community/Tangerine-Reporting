@@ -8,6 +8,7 @@ const nano = require('nano');
 const TMP_TANGERINE = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
+// const DEMO_TANG = nano('https://admin:t4ngerines33d@demo.tangerinecentral.org/db/group-mel_100');
 
 /**
  * GET /assessment
@@ -27,17 +28,20 @@ exports.all = (req, res) => {
 /**
  * GET /assessment/:id
  * return all headers and keys for a particuler assessment
- */
+*/
 exports.get = (req, res) => {
   let assessmentId = req.params.id;
   createColumnHeaders(assessmentId)
     .then((result) => {
-      res.json(result);
+      return saveHeaders(result, assessmentId);
+    })
+    .then((data) => {
+      res.json(data);
     })
     .catch((err) => res.send(Error(err)));
 }
 
-const createColumnHeaders = function(docTypeId, count) {
+const createColumnHeaders = function(docTypeId, count = 0) {
   let assessments = [];
   return new Promise((resolve, reject) => {
     getAssessment(docTypeId)
@@ -115,12 +119,9 @@ const createColumnHeaders = function(docTypeId, count) {
             subtestCounts.timestampCount++;
           }
         }
-
         let assessmentSuffix = count > 0 ? `_${count}` : '';
         assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docTypeId}.end_time${assessmentSuffix}` });
 
-        // Save headers in Result DB
-        // await saveHeaders(assessments, assessmentId);
         resolve(assessments);
       })
       .catch((err) => reject(err));

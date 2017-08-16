@@ -42,22 +42,26 @@ exports.all = (req, res) => {
  * return result for a particular assessment id
  */
 exports.get = (req, res) => {
-  let assessmentId = req.params.id;
-  generateResult(assessmentId)
+  let parentId = req.params.id;
+  retrieveDoc(parentId)
     .then((data) => {
-      res.json(data);
+      return generateResult(data.assessmentId)
+    })
+    .then((result) => {
+      return saveResult(result, parentId);
+    })
+    .then((saved) => {
+      res.json(saved);
     })
     .catch((err) => res.send(Error(err)));
 }
 
-const generateResult = function(docId, count) {
+const generateResult = function(docId, count = 0) {
   let result = {};
   return new Promise ((resolve, reject) => {
-    getResultById(docId, count)
+    getResultById(docId)
       .then((collections) => {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
-        result.result_id = docId;
-
         for (data of collections) {
           result[`${data.assessmentId}.assessmentId${assessmentSuffix}`] = data.assessmentId;
           result[`${data.assessmentId}.assessmentName${assessmentSuffix}`] = data.assessmentName;
@@ -137,11 +141,20 @@ const generateResult = function(docId, count) {
   });
 }
 
+// Retrieve document by id
+function retrieveDoc(docId) {
+  return new Promise ((resolve, reject) => {
+    TAYARI_BACKUP.get(docId, (err, body) => {
+      if (err) reject(err);
+      resolve(body)
+    });
+  });
+}
+
 // Save doc into result DB
-const saveResult = function(docs, id) {
-  let ref = `${id}-result`;
+const saveResult = function(docs, key) {
   return new Promise((resolve, reject) => {
-    RESULT_DB.insert({ processed_results: docs }, ref, (err, body) => {
+    RESULT_DB.insert({ processed_results: docs }, key, (err, body) => {
       if (err) reject(err);
       resolve(body);
     });
@@ -149,7 +162,7 @@ const saveResult = function(docs, id) {
 }
 
 // Get result collection by assessment id
-function getResultById(docId, count) {
+function getResultById(docId) {
   return new Promise((resolve, reject) => {
     TAYARI_BACKUP
       .view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {

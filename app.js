@@ -19,6 +19,7 @@ const assessmentController = require('./controllers/assessment');
 const resultController = require('./controllers/result');
 const workflowController = require('./controllers/workflow');
 const csvController = require('./controllers/generate_csv');
+const changesController = require('./controllers/changes');
 
 // Primary app routes
 app.get('/assessment', assessmentController.all);
@@ -26,8 +27,10 @@ app.get('/assessment/:id', assessmentController.get);
 app.get('/result', resultController.all);
 app.get('/result/:id', resultController.get);
 app.get('/workflow', workflowController.all);
-app.get('/workflow/:id', workflowController.get);
+app.get('/workflow/headers/:id', workflowController.getHeaders);
+app.get('/workflow/result/:id', workflowController.getResults);
 app.get('/generate/:id', csvController.generate);
+app.get('/tangerine_changes', changesController.changes);
 
 // Error Handler
 app.use(errorHandler());
