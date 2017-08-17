@@ -31,7 +31,6 @@
     "lodash": "^4.17.4",
     "morgan": "^1.8.2",
     "nano": "^6.4.0",
-    "nano-promises": "^1.2.0",
     "path": "^0.12.7"
   },
   "devDependencies": {
