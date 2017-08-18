@@ -229,7 +229,7 @@ function createLocation(doc, subtestCounts) {
     let locSuffix = count > 0 ? `_${count}` : '';
     locationHeader.push({
       header: `${labels[i]}${locSuffix}`,
-      key: `${doc._id}.${labels[i]}${locSuffix}`
+      key: `${doc._id}.${labels[i].toLowerCase()}${locSuffix}`
     });
   }
   locationHeader.push({

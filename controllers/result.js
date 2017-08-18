@@ -189,8 +189,8 @@ function processLocationResult(body, subtestCounts) {
   let subtestId = body.subtestId;
 
   for (i = 0; i < labels.length; i++) {
-    let key = `${subtestId}.${labels[i]}${locSuffix}`
-    locationResult[key] = location[i];
+    let key = `${subtestId}.${labels[i].toLowerCase()}${locSuffix}`
+    locationResult[key] = location[i].toLowerCase();
   }
   locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.timestamp;
 

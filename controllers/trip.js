@@ -20,9 +20,9 @@ exports.getResults = (req, res) => {
       parentId = doc.tripId;
       return processWorkflowResult(doc.workflowId);
     })
-    // .then((result) => {
-    //   return saveResult(result, parentId);
-    // })
+    .then((result) => {
+      return saveResult(result, parentId);
+    })
     .then((data) => {
       res.json(data);
     })
