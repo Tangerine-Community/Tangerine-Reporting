@@ -5,10 +5,8 @@ const chalk = require('chalk');
 
 // Connect to Couch DB
 const nano = require('nano');
-const TMP_TANGERINE = nano('http://localhost:5984/tmp_tangerine');
 const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
-// const DEMO_TANG = nano('https://admin:t4ngerines33d@demo.tangerinecentral.org/db/group-mel_100');
 
 /**
  * GET /assessment
@@ -225,7 +223,7 @@ function getQuestionBySubtestId(subtestId) {
 function createLocation(doc, subtestCounts) {
   let count = subtestCounts.locationCount;
   let locationHeader = [];
-  let labels = doc.locationCols;
+  let labels = doc.levels;
 
   for (i = 0; i < labels.length; i++) {
     let locSuffix = count > 0 ? `_${count}` : '';
