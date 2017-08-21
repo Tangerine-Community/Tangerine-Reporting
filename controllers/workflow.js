@@ -1,30 +1,27 @@
 // Module dependencies.
 const _ = require('lodash');
-
-// Connect to Couch DB
 const nano = require('nano');
-const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
-const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
-const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
 
 const generateHeaders = require('./assessment').createColumnHeaders;
 const saveHeaders = require('./assessment').saveHeaders;
 const processResult = require('./result').generateResult;
 const saveResult = require('./result').saveResult;
 
+let BASE_DB, DB_URL, RESULT_DB;
+
 /**
  * GET /workflow
  * return all workflow assessments
  */
 exports.all = (req, res) => {
-  TAYARI_BACKUP
-    .view('ojai', 'byCollection', {
-      key: 'workflow',
-      include_docs: true
-    }, (err, body) => {
-      if (err) res.send(err);
-      res.json(body.rows)
-    });
+  BASE_DB = nano(req.body.base_db);
+  BASE_DB.view('ojai', 'byCollection', {
+    key: 'workflow',
+    include_docs: true
+  }, (err, body) => {
+    if (err) res.send(err);
+    res.json(body.rows)
+  });
 }
 
 /**
@@ -32,14 +29,18 @@ exports.all = (req, res) => {
  * return headers and keys for a particular workflow
  */
 exports.getHeaders = (req, res) => {
+  DB_URL = req.body.base_db;
+  BASE_DB = nano(DB_URL);
+  RESULT_DB = nano(req.body.result_db);
   let workflowId;
+
   retrieveDoc(req.params.id)
     .then((doc) => {
       workflowId = doc.workflowId;
       return createWorkflowHeaders(workflowId);
     })
     .then((colHeaders) => {
-      return saveHeaders(colHeaders, workflowId);
+      return saveHeaders(colHeaders, workflowId, RESULT_DB);
     })
     .then((data) => {
       res.json(data);
@@ -62,12 +63,12 @@ const createWorkflowHeaders = function(docId) {
 
         for (item of data.children) {
           if (item.type === 'assessment') {
-            let assessmentHeaders = await generateHeaders(item.typesId, workflowCounts.assessmentCount);
+            let assessmentHeaders = await generateHeaders(item.typesId, workflowCounts.assessmentCount, DB_URL);
             workflowHeaders.push(assessmentHeaders);
             workflowCounts.assessmentCount++;
           }
           if (item.type === 'curriculum') {
-            let curriculumHeaders = await generateHeaders(item.typesId, workflowCounts.curriculumCount);
+            let curriculumHeaders = await generateHeaders(item.typesId, workflowCounts.curriculumCount, DB_URL);
             workflowHeaders.push(curriculumHeaders);
             workflowCounts.curriculumCount++;
           }
@@ -88,7 +89,7 @@ const createWorkflowHeaders = function(docId) {
 // Retrieve document by id
 function retrieveDoc(docId) {
   return new Promise ((resolve, reject) => {
-    TAYARI_BACKUP.get(docId, (err, body) => {
+    BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);
       resolve(body)
     });
@@ -98,7 +99,7 @@ function retrieveDoc(docId) {
 // Retrieve a particular workflow collection
 function getWorkflowById(docId) {
   return new Promise ((resolve, reject) => {
-    TAYARI_BACKUP.get(docId, (err, body) => {
+    BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);
       resolve(body)
     });

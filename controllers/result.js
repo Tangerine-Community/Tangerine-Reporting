@@ -2,12 +2,10 @@
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
-
-// Connect to Couch DB
 const nano = require('nano');
-const TMP_TANGERINE = nano('http://localhost:5984/tmp_tangerine');
-const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
-const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
+
+// Declare database variables
+let RESULT_DB, BASE_DB;
 
 gridValueMap = {
   'correct': '1',
@@ -30,11 +28,11 @@ surveyValueMap = {
  * return all results collection
  */
 exports.all = (req, res) => {
-  TAYARI_BACKUP
-    .list({ limit: 100, include_docs: true }, (err, body) => {
-      if (err) res.json(err);
-      res.json(body.rows);
-    });
+  BASE_DB = nano(req.body.base_db);
+  BASE_DB.list({ limit: 100, include_docs: true }, (err, body) => {
+    if (err) res.json(err);
+    res.json(body.rows);
+  });
 }
 
 /**
@@ -42,22 +40,26 @@ exports.all = (req, res) => {
  * return result for a particular assessment id
  */
 exports.get = (req, res) => {
+  BASE_DB = nano(req.body.base_db);
+  RESULT_DB = nano(req.body.result_db);
   let parentId = req.params.id;
+
   retrieveDoc(parentId)
     .then((data) => {
       return generateResult(data.assessmentId)
     })
-    .then((result) => {
-      return saveResult(result, parentId);
-    })
+    // .then((result) => {
+    //   return saveResult(result, parentId, RESULT_DB);
+    // })
     .then((saved) => {
       res.json(saved);
     })
     .catch((err) => res.send(Error(err)));
 }
 
-const generateResult = function(docId, count = 0) {
+const generateResult = function(docId, count = 0, dbUrl) {
   let result = {};
+  BASE_DB = BASE_DB || nano(dbUrl);
   return new Promise ((resolve, reject) => {
     getResultById(docId)
       .then((collections) => {
@@ -144,7 +146,7 @@ const generateResult = function(docId, count = 0) {
 // Retrieve document by id
 function retrieveDoc(docId) {
   return new Promise ((resolve, reject) => {
-    TAYARI_BACKUP.get(docId, (err, body) => {
+    BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);
       resolve(body)
     });
@@ -152,9 +154,9 @@ function retrieveDoc(docId) {
 }
 
 // Save doc into result DB
-const saveResult = function(docs, key) {
+const saveResult = function(docs, key, resultDB) {
   return new Promise((resolve, reject) => {
-    RESULT_DB.insert({ processed_results: docs }, key, (err, body) => {
+    resultDB.insert({ processed_results: docs }, key, (err, body) => {
       if (err) reject(err);
       resolve(body);
     });
@@ -164,17 +166,16 @@ const saveResult = function(docs, key) {
 // Get result collection by assessment id
 function getResultById(docId) {
   return new Promise((resolve, reject) => {
-    TAYARI_BACKUP
-      .view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
-        if (err) reject(err);
-        let resultCollection = [];
-        _.filter(body.rows, (data) => {
-          if (data.doc.assessmentId === docId) {
-            resultCollection.push(data.doc);
-          }
-        });
-        resolve(resultCollection);
+    BASE_DB.view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
+      if (err) reject(err);
+      let resultCollection = [];
+      _.filter(body.rows, (data) => {
+        if (data.doc.assessmentId === docId) {
+          resultCollection.push(data.doc);
+        }
       });
+      resolve(resultCollection);
+    });
   })
 
 }

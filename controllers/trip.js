@@ -1,27 +1,29 @@
 // Module dependencies.
-const _ = require('lodash');
-
-// Connect to Couch DB
 const nano = require('nano');
-const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
-const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
+const _ = require('lodash');
 
 const processResult = require('./result').generateResult;
 const saveResult = require('./result').saveResult;
+
+let BASE_DB, DB_URL, RESULT_DB;
 
 /**
  * GET /workflow/result/:id
  * return result for a particular workflow
 */
 exports.getResults = (req, res) => {
+  DB_URL = req.body.base_db;
+  BASE_DB = nano(DB_URL);
+  RESULT_DB = req.body.result_db;
   let parentId;
+
   retrieveDoc(req.params.id)
     .then((doc) => {
       parentId = doc.tripId;
       return processWorkflowResult(doc.workflowId);
     })
     .then((result) => {
-      return saveResult(result, parentId);
+      return saveResult(result, parentId, RESULT_DB);
     })
     .then((data) => {
       res.json(data);
@@ -44,12 +46,12 @@ const processWorkflowResult = function(docId) {
 
         for (item of data.children) {
           if (item.type === 'assessment') {
-            let assessmentResults = await processResult(item.typesId, workflowCounts.assessmentCount);
+            let assessmentResults = await processResult(item.typesId, workflowCounts.assessmentCount, DB_URL);
             workflowResults = _.assignIn(workflowResults, assessmentResults);
             workflowCounts.assessmentCount++;
           }
           if (item.type === 'curriculum') {
-            let curriculumResults = await processResult(item.typesId, workflowCounts.curriculumCount);
+            let curriculumResults = await processResult(item.typesId, workflowCounts.curriculumCount, DB_URL);
             workflowResults = _.assignIn(workflowResults, curriculumResults);
             workflowCounts.curriculumCount++;
           }
@@ -69,7 +71,7 @@ const processWorkflowResult = function(docId) {
 // Retrieve document by id
 function retrieveDoc(docId) {
   return new Promise ((resolve, reject) => {
-    TAYARI_BACKUP.get(docId, (err, body) => {
+    BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);
       resolve(body)
     });
@@ -79,7 +81,7 @@ function retrieveDoc(docId) {
 // Retrieve a particular workflow collection
 function getWorkflowById(docId) {
   return new Promise ((resolve, reject) => {
-    TAYARI_BACKUP.get(docId, (err, body) => {
+    BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);
       resolve(body)
     });

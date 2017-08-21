@@ -23,15 +23,15 @@ const changesController = require('./controllers/changes');
 const tripController = require('./controllers/trip');
 
 // Primary app routes
-app.get('/assessment', assessmentController.all);
-app.get('/assessment/:id', assessmentController.get);
-app.get('/result', resultController.all);
-app.get('/result/:id', resultController.get);
-app.get('/workflow', workflowController.all);
-app.get('/workflow/headers/:id', workflowController.getHeaders);
-app.get('/generate_csv/:id', csvController.generate);
-app.get('/tangerine_changes', changesController.changes);
-app.get('/workflow/result/:id', tripController.getResults);
+app.post('/assessment', assessmentController.all);
+app.post('/assessment/:id', assessmentController.get);
+app.post('/result', resultController.all);
+app.post('/result/:id', resultController.get);
+app.post('/workflow', workflowController.all);
+app.post('/workflow/headers/:id', workflowController.getHeaders);
+app.post('/generate_csv/:id', csvController.generate);
+app.post('/tangerine_changes', changesController.changes);
+app.post('/workflow/result/:id', tripController.getResults);
 
 // Error Handler
 app.use(errorHandler());

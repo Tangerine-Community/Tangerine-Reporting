@@ -2,25 +2,24 @@
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
-
-// Connect to Couch DB
 const nano = require('nano');
-const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
-const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
+
+// Declare database variables
+let RESULT_DB, BASE_DB;
 
 /**
  * GET /assessment
  * return all assessments
  */
 exports.all = (req, res) => {
-  TAYARI_BACKUP
-    .view('ojai', 'byCollection', {
-      key: 'assessment',
-      include_docs: true
-    }, (err, body) => {
-      if (err) res.send(err);
-      res.json(body.rows)
-    });
+  BASE_DB = nano(req.body.base_db);
+  BASE_DB.view('ojai', 'byCollection', {
+    key: 'assessment',
+    include_docs: true
+  }, (err, body) => {
+    if (err) res.send(err);
+    res.json(body.rows);
+  });
 }
 
 /**
@@ -28,10 +27,13 @@ exports.all = (req, res) => {
  * return all headers and keys for a particuler assessment
 */
 exports.get = (req, res) => {
+  BASE_DB = nano(req.body.base_db);
+  RESULT_DB = nano(req.body.result_db);
   let assessmentId = req.params.id;
+
   createColumnHeaders(assessmentId)
     .then((result) => {
-      return saveHeaders(result, assessmentId);
+      return saveHeaders(result, assessmentId, RESULT_DB);
     })
     .then((data) => {
       res.json(data);
@@ -39,8 +41,10 @@ exports.get = (req, res) => {
     .catch((err) => res.send(Error(err)));
 }
 
-const createColumnHeaders = function(docTypeId, count = 0) {
+const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
   let assessments = [];
+  BASE_DB = BASE_DB || nano(dbUrl);
+
   return new Promise((resolve, reject) => {
     getAssessment(docTypeId)
       .then((item) => {
@@ -128,9 +132,9 @@ const createColumnHeaders = function(docTypeId, count = 0) {
 }
 
 // Save docs into results DB
-const saveHeaders = function(docs, ref) {
+const saveHeaders = function(docs, ref, resultDB) {
   return new Promise((resolve, reject) => {
-    RESULT_DB.insert({ column_headers: docs }, ref, (err, body) => {
+    resultDB.insert({ column_headers: docs }, ref, (err, body) => {
       if (err) reject(err);
       resolve(body);
     });
@@ -140,7 +144,7 @@ const saveHeaders = function(docs, ref) {
 // Get a particular assessment collection
 function getAssessment(id) {
   return new Promise((resolve, reject) => {
-    TAYARI_BACKUP.get(id, { include_docs: true }, (err, body) => {
+    BASE_DB.get(id, { include_docs: true }, (err, body) => {
       if (err) reject(err);
       resolve(body);
     });
@@ -150,72 +154,68 @@ function getAssessment(id) {
 // Get all results collection
 function getResults() {
   return new Promise((resolve, reject) => {
-    TAYARI_BACKUP
-      .view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
-        if (err) reject(err);
-        let doc = _.map(body.rows, (data) => {
-          return data.doc;
-        });
-        resolve(doc);
+    BASE_DB.view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
+      if (err) reject(err);
+      let doc = _.map(body.rows, (data) => {
+        return data.doc;
       });
+      resolve(doc);
+    });
   });
 }
 
 // Get all subtest collection
 function getSubtests(id) {
   return new Promise((resolve, reject) => {
-    TAYARI_BACKUP
-      .view('ojai', 'subtestsByAssessmentId', {
-        key: id,
-        limit: 100,
-        include_docs: true
-      }, (err, body) => {
-        if (err) reject(err);
-        let subtestDoc = [];
-        _.each(body.rows, (data) => {
-          subtestDoc.push(data.doc);
-        });
-        let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
-        resolve(orderedSubtests);
-      })
+    BASE_DB.view('ojai', 'subtestsByAssessmentId', {
+      key: id,
+      limit: 100,
+      include_docs: true
+    }, (err, body) => {
+      if (err) reject(err);
+      let subtestDoc = [];
+      _.each(body.rows, (data) => {
+        subtestDoc.push(data.doc);
+      });
+      let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
+      resolve(orderedSubtests);
+    })
   });
 }
 
 // Get all question collection
 function getQuestions(id) {
   return new Promise((resolve, reject) => {
-    TAYARI_BACKUP
-      .view('ojai', 'questionsByParentId', {
-        key: id,
-        limit: 100,
-        include_docs: true
-      }, (err, body) => {
-        if (err) reject(err);
-        let questionDoc = [];
-        _.each(body.rows, (data) => {
-          questionDoc.push(data.doc);
-        });
-        let orderedQuestion = _.sortBy(questionDoc, ['order']);
-        resolve(orderedQuestion);
-      })
+    BASE_DB.view('ojai', 'questionsByParentId', {
+      key: id,
+      limit: 100,
+      include_docs: true
+    }, (err, body) => {
+      if (err) reject(err);
+      let questionDoc = [];
+      _.each(body.rows, (data) => {
+        questionDoc.push(data.doc);
+      });
+      let orderedQuestion = _.sortBy(questionDoc, ['order']);
+      resolve(orderedQuestion);
+    })
   });
 }
 
 // Get all questions associated with a particular subtest
 function getQuestionBySubtestId(subtestId) {
   return new Promise((resolve, reject) => {
-    TAYARI_BACKUP
-      .view('ojai', 'questionsByParentId', {
-        key: subtestId,
-        limit: 100,
-        include_docs: true
-      }, (err, body) => {
-        if (err) reject(err);
-        let doc = _.map(body.rows, (data) => {
-          return data.doc;
-        });
-        resolve(doc);
+    BASE_DB.view('ojai', 'questionsByParentId', {
+      key: subtestId,
+      limit: 100,
+      include_docs: true
+    }, (err, body) => {
+      if (err) reject(err);
+      let doc = _.map(body.rows, (data) => {
+        return data.doc;
       });
+      resolve(doc);
+    });
   });
 }
 

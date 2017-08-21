@@ -2,12 +2,9 @@
 const _ = require('lodash');
 const chalk = require('chalk');
 const Excel = require('exceljs');
-
-// Connect to Couch DB
 const nano = require('nano');
-const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
-const TAYARI_BACKUP = nano('http://localhost:5984/tayari_backup');
 
+let BASE_DB, RESULT_DB;
 const createHeaders = require('./assessment').createColumnHeaders;
 const processResult = require('./result').generateResult;
 
@@ -16,13 +13,16 @@ const processResult = require('./result').generateResult;
  * generate csv for a particular workflow id
 */
 exports.generate = (req, res) => {
-  let docHeaders;
+  BASE_DB = nano(req.body.base_db);
+  RESULT_DB = nano(req.body.result_db);
   let docId = req.params.id;
+  let resultDocId = req.body.resultId;
+  let docHeaders;
 
   getResultHeaders(docId)
     .then((data) => {
       docHeaders = data;
-      return getProcessedResult(docId);
+      return getProcessedResult(resultDocId);
     })
     .then((result) => {
       let genCSV = generateCSV(docHeaders, result);
@@ -75,9 +75,8 @@ const generateCSV = function(colSettings, resultData) {
 
 // Retrieve processed result by Id from RESULT DB
 function getProcessedResult(docId) {
-  let key = `${docId}-result`
   return new Promise((resolve, reject) => {
-    RESULT_DB.get(key, (err, body) => {
+    RESULT_DB.get(docId, (err, body) => {
       if (err) reject(err);
       resolve(body);
     });
