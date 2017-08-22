@@ -1,17 +1,30 @@
-// Module dependencies.
+/**
+ * This file generates the metadata for a workflow.
+ * It also exposes the createWorkflowHeaders module.
+ */
+
+/**
+ * Module dependencies
+ */
 const _ = require('lodash');
 const nano = require('nano');
 
+/**
+ * Local module
+ */
 const generateHeaders = require('./assessment').createColumnHeaders;
 const saveHeaders = require('./assessment').saveHeaders;
 const processResult = require('./result').generateResult;
 const saveResult = require('./result').saveResult;
 
+/**
+ * Declare database variables
+ */
 let BASE_DB, DB_URL, RESULT_DB;
 
 /**
- * GET /workflow
- * return all workflow assessments
+ * POST /workflow
+ * returns all workflow collection in the database.
  */
 exports.all = (req, res) => {
   BASE_DB = nano(req.body.base_db);
@@ -25,8 +38,8 @@ exports.all = (req, res) => {
 }
 
 /**
- * GET /workflow/headers/:id
- * return headers and keys for a particular workflow
+ * POST /workflow/headers/:id
+ * returns processed metadata for a workflow
  */
 exports.getHeaders = (req, res) => {
   DB_URL = req.body.base_db;
@@ -48,12 +61,16 @@ exports.getHeaders = (req, res) => {
     .catch((err) => res.send(Error(err)));
 }
 
-// Create workflow headers
+/**
+ * This function creates headers for a workflow.
+ * @param {string} docId worklfow id of the document.
+ * @returns {Array} generated headers for csv.
+ */
 const createWorkflowHeaders = function(docId) {
   let workflowHeaders = [];
 
   return new Promise ((resolve, reject) => {
-    getWorkflowById(docId)
+    retrieveDoc(docId)
       .then(async(data) => {
         let workflowCounts = {
           assessmentCount: 0,
@@ -86,18 +103,12 @@ const createWorkflowHeaders = function(docId) {
   });
 }
 
-// Retrieve document by id
+/**
+ * This function retrieves a document from the database.
+ * @param {string} docId id of document.
+ * @returns {Object} retrieved document.
+ */
 function retrieveDoc(docId) {
-  return new Promise ((resolve, reject) => {
-    BASE_DB.get(docId, (err, body) => {
-      if (err) reject(err);
-      resolve(body)
-    });
-  });
-}
-
-// Retrieve a particular workflow collection
-function getWorkflowById(docId) {
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);

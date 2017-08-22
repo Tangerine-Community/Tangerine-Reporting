@@ -1,28 +1,42 @@
-// Module dependencies.
+/**
+ * This file generates a CSV file.
+ * It also exposes the generateCSV module.
+ */
+
+/**
+ * Module dependencies
+ */
 const _ = require('lodash');
 const chalk = require('chalk');
 const Excel = require('exceljs');
 const nano = require('nano');
 
+/**
+ * Declare database variables.
+ */
 let BASE_DB, RESULT_DB;
+
+/**
+ * Local modules.
+ */
 const createHeaders = require('./assessment').createColumnHeaders;
 const processResult = require('./result').generateResult;
 
 /**
- * GET /generate/:id
- * generate csv for a particular workflow id
+ * POST /generate
+ * generate a csv file.
 */
 exports.generate = (req, res) => {
   BASE_DB = nano(req.body.base_db);
   RESULT_DB = nano(req.body.result_db);
-  let docId = req.params.id;
+  let headerDocId = req.body.headerId;
   let resultDocId = req.body.resultId;
   let docHeaders;
 
-  getResultHeaders(docId)
+  getDocument(headerDocId)
     .then((data) => {
       docHeaders = data;
-      return getProcessedResult(resultDocId);
+      return getDocument(resultDocId);
     })
     .then((result) => {
       let genCSV = generateCSV(docHeaders, result);
@@ -31,8 +45,12 @@ exports.generate = (req, res) => {
     .catch((err) => Error(err));
 }
 
-// Get result headers from result_db
-const getResultHeaders = function(docId) {
+/**
+ * This function retrieves a document from the database.
+ * @param {string} docId id of document.
+ * @returns {Object} retrieved document.
+ */
+const getDocument = function(docId) {
   return new Promise((resolve, reject) => {
     RESULT_DB.get(docId, (err, body) => {
       if (err) reject(err);
@@ -41,7 +59,11 @@ const getResultHeaders = function(docId) {
   });
 }
 
-// Generate CSV file
+/**
+ * This function generates a CSV file.
+ * @param {Object, Object} [colSettings,resultData] headers and result data.
+ * @returns {Object} retrieved document.
+ */
 const generateCSV = function(colSettings, resultData) {
   let workbook = new Excel.Workbook();
   workbook.creator = 'Brockman';
@@ -71,16 +93,6 @@ const generateCSV = function(colSettings, resultData) {
     })
     .catch((err) => Error(err));
 
-}
-
-// Retrieve processed result by Id from RESULT DB
-function getProcessedResult(docId) {
-  return new Promise((resolve, reject) => {
-    RESULT_DB.get(docId, (err, body) => {
-      if (err) reject(err);
-      resolve(body);
-    });
-  });
 }
 
 exports.generateCSV = generateCSV;

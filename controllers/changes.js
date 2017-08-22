@@ -1,19 +1,33 @@
-// Module dependencies.
+/**
+ * This file implements couch DB changes features.
+ * It watches for any changes in the database and
+ * processes the changed document based on its type.
+ */
+
+/**
+ * Module Dependencies.
+ */
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
 const nano = require('nano');
 
+/**
+ * Local modules.
+ */
 const generateAssessmentHeaders = require('./assessment').createColumnHeaders;
 const processAssessmentResult = require('./result').generateResult;
 const generateWorkflowHeaders = require('./workflow').createWorkflowHeaders;
 const processWorkflowResult = require('./workflow').processWorkflowResult;
 
+/**
+ * Declare database variable.
+ */
 let BASE_DB;
 
 /**
- * GET /tangerine_changes
- * process headers and result of changed document
+ * POST /tangerine_changes
+ * returns the processed data for the changed document.
 */
 exports.changes = (req, res) => {
   BASE_DB = nano(req.body.base_db);

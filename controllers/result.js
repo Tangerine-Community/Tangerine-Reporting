@@ -1,31 +1,44 @@
-//  Module dependencies
+/**
+ * This file processes the result of an assessment.
+ * The processed result will serve as the values for CSV generation.
+ * It also exposes the generateResult and saveResult modules.
+ */
+
+/**
+ * Module dependencies
+ */
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
 const nano = require('nano');
 
-// Declare database variables
+/**
+ * Declare database variables
+ */
 let RESULT_DB, BASE_DB;
 
-gridValueMap = {
+/**
+ * Define value maps for grid and survey values.
+ */
+const gridValueMap = {
   'correct': '1',
   'incorrect': '0',
   'missing': '.',
   'skipped': '999',
   'logicSkipped': '999'
-}
+};
 
-surveyValueMap = {
+const surveyValueMap = {
   'checked': '1',
   'unchecked': '0',
-  'not asked' : '.' ,
+  'not asked' : '.',
   'skipped': '999',
   'logicSkipped': '999'
-}
+};
 
 /**
- * GET /result
- * return all results collection
+ * POST /result
+ * returns all result collection.
  */
 exports.all = (req, res) => {
   BASE_DB = nano(req.body.base_db);
@@ -36,8 +49,8 @@ exports.all = (req, res) => {
 }
 
 /**
- * GET /result/:id
- * return result for a particular assessment id
+ * POST /result/:id
+ * returns processed result for an assessment.
  */
 exports.get = (req, res) => {
   BASE_DB = nano(req.body.base_db);
@@ -48,18 +61,24 @@ exports.get = (req, res) => {
     .then((data) => {
       return generateResult(data.assessmentId)
     })
-    // .then((result) => {
-    //   return saveResult(result, parentId, RESULT_DB);
-    // })
+    .then((result) => {
+      return saveResult(result, parentId, RESULT_DB);
+    })
     .then((saved) => {
       res.json(saved);
     })
     .catch((err) => res.send(Error(err)));
 }
 
+/**
+ * This function processes the result for an assessment.
+ * @param {string, number, string} [docId, count, dbUrl] assessmentId, count and database url.
+ * @returns {Object} processed result for csv.
+ */
 const generateResult = function(docId, count = 0, dbUrl) {
   let result = {};
   BASE_DB = BASE_DB || nano(dbUrl);
+
   return new Promise ((resolve, reject) => {
     getResultById(docId)
       .then((collections) => {
@@ -143,7 +162,11 @@ const generateResult = function(docId, count = 0, dbUrl) {
   });
 }
 
-// Retrieve document by id
+/**
+ * This function retrieves a document from the database.
+ * @param {string} docId id of document.
+ * @returns {Object} retrieved document.
+ */
 function retrieveDoc(docId) {
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
@@ -153,7 +176,11 @@ function retrieveDoc(docId) {
   });
 }
 
-// Save doc into result DB
+/**
+ * This function inserts a document in the database.
+ * @param {string, string, string} [docs, key, resultDB] document, key and database.
+ * @returns {Object} saved document.
+ */
 const saveResult = function(docs, key, resultDB) {
   return new Promise((resolve, reject) => {
     resultDB.insert({ processed_results: docs }, key, (err, body) => {
@@ -163,7 +190,11 @@ const saveResult = function(docs, key, resultDB) {
   });
 }
 
-// Get result collection by assessment id
+/**
+ * This function retrieves a result document.
+ * @param {string} docId id of document.
+ * @returns {Array} result documents.
+ */
 function getResultById(docId) {
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
@@ -180,7 +211,11 @@ function getResultById(docId) {
 
 }
 
-// Generate location prototype result
+/**
+ * This function processes result for a location prototype.
+ * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @returns {Object} processed location data.
+ */
 function processLocationResult(body, subtestCounts) {
   let count = subtestCounts.locationCount;
   let i, locationResult = {};
@@ -198,21 +233,29 @@ function processLocationResult(body, subtestCounts) {
   return locationResult;
 }
 
-// Generate datetime prototype result
-function processDatetimeResult(doc, subtestCounts) {
+/**
+ * This function processes result for a datetime prototype.
+ * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @returns {Object} processed datetime data.
+ */
+function processDatetimeResult(body, subtestCounts) {
   let count = subtestCounts.datetimeCount;
   let suffix = count > 0 ? `_${count}` : '';
   datetimeResult = {
-    [`${doc.subtestId}.year${suffix}`]: doc.data.year,
-    [`${doc.subtestId}.month${suffix}`]: doc.data.month,
-    [`${doc.subtestId}.day${suffix}`]: doc.data.day,
-    [`${doc.subtestId}.assess_time${suffix}`]: doc.data.time,
-    [`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`]: doc.timestamp
+    [`${body.subtestId}.year${suffix}`]: body.data.year,
+    [`${body.subtestId}.month${suffix}`]: body.data.month,
+    [`${body.subtestId}.day${suffix}`]: body.data.day,
+    [`${body.subtestId}.assess_time${suffix}`]: body.data.time,
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
   }
   return datetimeResult;
 }
 
-// Generate result for consent prototype
+/**
+ * This function processes a consent prototype subtest data.
+ * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @returns {Object} processed consent data.
+ */
 function processConsentResult(body, subtestCounts) {
   let count = subtestCounts.consentCount;
   let suffix = count > 0 ? `_${count}` : '';
@@ -223,7 +266,11 @@ function processConsentResult(body, subtestCounts) {
   return consentResult;
 }
 
-// Generate result for ID prototype
+/**
+ * This function processes an id prototype subtest data.
+ * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @returns {Object} processed id data.
+ */
 function processIDResult(body, subtestCounts) {
   let count = subtestCounts.idCount;
   let suffix = count > 0 ? `_${count}` : '';
@@ -234,7 +281,11 @@ function processIDResult(body, subtestCounts) {
   return idResult;
 }
 
-// Generate result for survey prototype
+/**
+ * This function processes a survey prototype subtest data.
+ * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @returns {Object} processed survey data.
+ */
 function processSurveyResult(body, subtestCounts) {
   let count = subtestCounts.surveyCount;
   let surveyResult = {};
@@ -255,7 +306,11 @@ function processSurveyResult(body, subtestCounts) {
   return surveyResult;
 }
 
-// Generate result for grid prototype
+/**
+ * This function processes a grid prototype subtest data.
+ * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @returns {Object} processed grid data.
+ */
 function processGridResult(body, subtestCounts) {
   let count = subtestCounts.gridCount;
   let varName = body.data.variable_name || body.name.toLowerCase().replace(/\s/g, '_');
@@ -279,7 +334,11 @@ function processGridResult(body, subtestCounts) {
   return gridResult;
 }
 
-// Generate result for GPS prototype
+/**
+ * This function processes a gps prototype subtest data.
+ * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @returns {Object} processed gps data.
+ */
 function processGpsResult(doc, subtestCounts) {
   let count = subtestCounts.gpsCount;
   let gpsResult = {};
@@ -297,7 +356,11 @@ function processGpsResult(doc, subtestCounts) {
   return gpsResult;
 }
 
-// Generate result for Camera prototype
+/**
+ * This function processes a camera prototype subtest data.
+ * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @returns {Object} processed camera data.
+ */
 function processCamera(body, subtestCounts) {
   let count = subtestCounts.cameraCount;
   let cameraResult = {};
@@ -311,14 +374,24 @@ function processCamera(body, subtestCounts) {
   return cameraResult;
 }
 
-translateSurveyValue = function(databaseValue) {
+/**
+ * This function maps survey result to a survey map value.
+ * @param {string} databaseValue result value to be mapped.
+ * @returns {string} translated survey value.
+ */
+function translateSurveyValue(databaseValue) {
   if (databaseValue == null) {
     databaseValue = 'no_record';
   }
   return surveyValueMap[databaseValue] || String(databaseValue);
 };
 
-translateGridValue = function(databaseValue) {
+/**
+ * This function maps grid result to a grid map value.
+ * @param {string} databaseValue result value to be mapped.
+ * @returns {string} translated grid value.
+ */
+function translateGridValue(databaseValue) {
   if (databaseValue == null) {
     databaseValue = 'no_record';
   }

@@ -1,15 +1,25 @@
-// Module dependencies.
+/**
+ * This file creates headers or metadata from an assessment.
+ * These headers or metadata will serve as column headers for CSV generation.
+ * It also exposes the createColumnHeaders and saveHeaders modules.
+ */
+
+/**
+ * Module dependencies.
+ */
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
 const nano = require('nano');
 
-// Declare database variables
+/**
+ * Declare database variables.
+ */
 let RESULT_DB, BASE_DB;
 
 /**
  * GET /assessment
- * return all assessments
+ * return all assessments.
  */
 exports.all = (req, res) => {
   BASE_DB = nano(req.body.base_db);
@@ -24,7 +34,7 @@ exports.all = (req, res) => {
 
 /**
  * GET /assessment/:id
- * return all headers and keys for a particuler assessment
+ * return all headers and keys for a assessment.
 */
 exports.get = (req, res) => {
   BASE_DB = nano(req.body.base_db);
@@ -41,6 +51,11 @@ exports.get = (req, res) => {
     .catch((err) => res.send(Error(err)));
 }
 
+/**
+ * This function processes the headers for an assessment.
+ * @param {string, number, string} [docTypeId, count, dbUrl] assessmentId, count and database url.
+ * @returns {Object} processed headers for csv.
+ */
 const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
   let assessments = [];
   BASE_DB = BASE_DB || nano(dbUrl);
@@ -131,7 +146,11 @@ const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
 
 }
 
-// Save docs into results DB
+/**
+ * This function inserts headers in the database.
+ * @param {string, string, string} [docs, ref, resultDB] document, key and database.
+ * @returns {Object} saved document.
+ */
 const saveHeaders = function(docs, ref, resultDB) {
   return new Promise((resolve, reject) => {
     resultDB.insert({ column_headers: docs }, ref, (err, body) => {
@@ -141,7 +160,11 @@ const saveHeaders = function(docs, ref, resultDB) {
   });
 }
 
-// Get a particular assessment collection
+/**
+ * This function retrieves an assessment document.
+ * @param {string} id id of document.
+ * @returns {Object} assessment documents.
+ */
 function getAssessment(id) {
   return new Promise((resolve, reject) => {
     BASE_DB.get(id, { include_docs: true }, (err, body) => {
@@ -151,7 +174,10 @@ function getAssessment(id) {
   });
 }
 
-// Get all results collection
+/**
+ * This function retrieves all result collection.
+ * @returns {Array} result documents.
+ */
 function getResults() {
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
@@ -164,7 +190,11 @@ function getResults() {
   });
 }
 
-// Get all subtest collection
+/**
+ * This function retrieves all subtest linked to an assessment.
+ * @param {string} id id of assessment document.
+ * @returns {Array} subtest documents.
+ */
 function getSubtests(id) {
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'subtestsByAssessmentId', {
@@ -183,26 +213,11 @@ function getSubtests(id) {
   });
 }
 
-// Get all question collection
-function getQuestions(id) {
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'questionsByParentId', {
-      key: id,
-      limit: 100,
-      include_docs: true
-    }, (err, body) => {
-      if (err) reject(err);
-      let questionDoc = [];
-      _.each(body.rows, (data) => {
-        questionDoc.push(data.doc);
-      });
-      let orderedQuestion = _.sortBy(questionDoc, ['order']);
-      resolve(orderedQuestion);
-    })
-  });
-}
-
-// Get all questions associated with a particular subtest
+/**
+ * This function retrieves all questions linked to a subtest document.
+ * @param {string} subtestId id of subtest document.
+ * @returns {Array} question documents.
+ */
 function getQuestionBySubtestId(subtestId) {
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'questionsByParentId', {
@@ -219,7 +234,11 @@ function getQuestionBySubtestId(subtestId) {
   });
 }
 
-// create location prototype column data
+/**
+ * This function creates headers for location prototypes.
+ * @param {Object, Object} [doc, subtestCounts] document to be processed and count.
+ * @returns {Array} generated location headers.
+ */
 function createLocation(doc, subtestCounts) {
   let count = subtestCounts.locationCount;
   let locationHeader = [];
@@ -240,7 +259,11 @@ function createLocation(doc, subtestCounts) {
   return locationHeader;
 }
 
-// Create datetime prototype column data
+/**
+ * This function creates headers for datetime prototypes.
+ * @param {Object, Object} [doc, subtestCounts] document to be processed and count.
+ * @returns {Array} generated datetime headers.
+ */
 function createDatetime(doc, subtestCounts) {
   let count = subtestCounts.datetimeCount;
   let suffix, datetimeHeader = [];
@@ -255,7 +278,11 @@ function createDatetime(doc, subtestCounts) {
   return datetimeHeader;
 }
 
-// Create consent prototype column data
+/**
+ * This function creates headers for consent prototypes.
+ * @param {Object, Object} [doc, subtestCounts] document to be processed and count.
+ * @returns {Array} generated consent headers.
+ */
 function createConsent(doc, subtestCounts) {
   let count = subtestCounts.consentCount;
   let suffix, consentHeader = [];
@@ -267,7 +294,11 @@ function createConsent(doc, subtestCounts) {
   return consentHeader;
 }
 
-// Create Id prototype column data
+/**
+ * This function creates headers for id prototypes.
+ * @param {Object, Object} [doc, subtestCounts] document to be processed and count.
+ * @returns {Array} generated id headers.
+ */
 function createId(doc, subtestCounts) {
   let count = subtestCounts.idCount;
   let suffix, idHeader = [];
@@ -279,7 +310,11 @@ function createId(doc, subtestCounts) {
   return idHeader;
 }
 
-// Create survey prototype column data
+/**
+ * This function creates headers for survey prototypes.
+ * @param {Object, Object} [id, subtestCounts] document to be processed and count.
+ * @returns {Array} generated survey headers.
+ */
 async function createSurvey(id, subtestCounts) {
   let count = subtestCounts.surveyCount;
   let surveyHeader = [];
@@ -313,7 +348,11 @@ async function createSurvey(id, subtestCounts) {
   return surveyHeader;
 }
 
-// Create grid prototype column data
+/**
+ * This function creates headers for grid prototypes.
+ * @param {Object, Object} [doc, subtestCounts] document to be processed and count.
+ * @returns {Array} generated grid headers.
+ */
 async function createGrid(doc, subtestCounts) {
   let count = subtestCounts.gridCount;
   let gridHeader = [];
@@ -378,7 +417,11 @@ async function createGrid(doc, subtestCounts) {
   return { gridHeader, timestampCount: subtestCounts.timestampCount };
 }
 
-// Create GPS prototype column data
+/**
+ * This function creates headers for gps prototypes.
+ * @param {Object, Object} [doc, subtestCounts] document to be processed and count.
+ * @returns {Array} generated gps headers.
+ */
 function createGps(doc, subtestCounts) {
   let count = subtestCounts.gpsCount;
   let gpsHeader = [];
@@ -396,7 +439,11 @@ function createGps(doc, subtestCounts) {
   return gpsHeader;
 }
 
-// Create camera prototype column data
+/**
+ * This function creates headers for camera prototypes.
+ * @param {Object, Object} [doc, subtestCounts] document to be processed and count.
+ * @returns {Array} generated camera headers.
+ */
 function createCamera(doc, subtestCounts) {
   let count = subtestCounts.cameraCount;
   let cameraheader = [];

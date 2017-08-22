@@ -1,15 +1,28 @@
-// Module dependencies.
+/**
+ * This file processes the result of a workflow.
+ * It also exposes the processWorkflowResult module.
+ */
+
+/**
+ * Module dependencies.
+*/
 const nano = require('nano');
 const _ = require('lodash');
 
+/**
+ * Module dependencies.
+ */
 const processResult = require('./result').generateResult;
 const saveResult = require('./result').saveResult;
 
+/**
+ * Declare database variables.
+ */
 let BASE_DB, DB_URL, RESULT_DB;
 
 /**
- * GET /workflow/result/:id
- * return result for a particular workflow
+ * POST /workflow/result/:id
+ * returns the processed result for a workflow.
 */
 exports.getResults = (req, res) => {
   DB_URL = req.body.base_db;
@@ -17,7 +30,7 @@ exports.getResults = (req, res) => {
   RESULT_DB = req.body.result_db;
   let parentId;
 
-  retrieveDoc(req.params.id)
+  getWorkflowDoc(req.params.id)
     .then((doc) => {
       parentId = doc.tripId;
       return processWorkflowResult(doc.workflowId);
@@ -31,12 +44,16 @@ exports.getResults = (req, res) => {
     .catch((err) => res.send(Error(err)));
 }
 
-// Create workflow results
+/**
+ * This function processes the result for a workflow.
+ * @param {string} docId worklfow id of the document.
+ * @returns {Object} processed result for csv.
+ */
 const processWorkflowResult = function(docId) {
   let workflowResults = {};
 
   return new Promise ((resolve, reject) => {
-    getWorkflowById(docId)
+    getWorkflowDoc(docId)
       .then(async(data) => {
         let workflowCounts = {
           assessmentCount: 0,
@@ -68,18 +85,12 @@ const processWorkflowResult = function(docId) {
   });
 }
 
-// Retrieve document by id
-function retrieveDoc(docId) {
-  return new Promise ((resolve, reject) => {
-    BASE_DB.get(docId, (err, body) => {
-      if (err) reject(err);
-      resolve(body)
-    });
-  });
-}
-
-// Retrieve a particular workflow collection
-function getWorkflowById(docId) {
+/**
+ * This function retrieves a document from the database.
+ * @param {string} docId id of document.
+ * @returns {Object} retrieved document.
+ */
+function getWorkflowDoc(docId) {
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);
