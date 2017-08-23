@@ -152,7 +152,7 @@ exports.get = (req, res) => {
  * This function processes the result for an assessment.
  * @param {string} docId - assessment id.
  * @param {number} count - count
- * @param {stringg} dbUrl - database url.
+ * @param {string} dbUrl - database url.
  * @returns {Object} - processed result for csv.
  */
 
@@ -264,11 +264,11 @@ function retrieveDoc(docId) {
   });
 }
 
- /**
+/**
  * This function inserts a document in the database.
  * @param {Array} docs - document to be saved.
  * @param {string} key - key for indexing.
- * @param {Objext} resultDB - the result database.
+ * @param {Object} resultDB - the result database.
  * @returns {Object} - saved document.
  */
 

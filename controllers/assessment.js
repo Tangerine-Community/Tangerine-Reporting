@@ -103,9 +103,9 @@ exports.get = (req, res) => {
   let assessmentId = req.params.id;
 
   createColumnHeaders(assessmentId)
-    // .then((result) => {
-    //   return saveHeaders(result, assessmentId, RESULT_DB);
-    // })
+    .then((result) => {
+      return saveHeaders(result, assessmentId, RESULT_DB);
+    })
     .then((data) => {
       res.json(data);
     })
@@ -215,7 +215,9 @@ const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
 
 /**
  * This function inserts headers in the database.
- * @param {Array, string, Object} [docs, ref, resultDB] document, key and database.
+ * @param {Array} docs - document to be saved.
+ * @param {string} ref - key for indexing.
+ * @param {Object} resultDB - the result database.
  * @returns {Object} saved document.
  */
 
