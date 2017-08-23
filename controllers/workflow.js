@@ -6,26 +6,60 @@
 /**
  * Module dependencies
  */
+
 const _ = require('lodash');
 const nano = require('nano');
 
 /**
  * Local module
  */
+
 const generateHeaders = require('./assessment').createColumnHeaders;
 const saveHeaders = require('./assessment').saveHeaders;
-const processResult = require('./result').generateResult;
-const saveResult = require('./result').saveResult;
 
 /**
  * Declare database variables
  */
+
 let BASE_DB, DB_URL, RESULT_DB;
 
 /**
- * POST /workflow
- * returns all workflow collection in the database.
+ * Retrieves all workflow collection in the database.
+ *
+ * Example:
+ *
+ *    POST /workflow
+ *
+ *  The request object must contain the database url
+ *       {
+ *         "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       }
+ *
+ * Response:
+ *
+ *  Returns an Array of objects of workflow collections.
+ *    [
+ *    	{
+ *        "id": "a1234567890",
+ *        "key": "assessment",
+ *        "value": {
+ *        	"r": "1-b123"
+ *        },
+ *        "doc": {
+ *        	"_id": "a1234567890",
+ *        	"_rev": "1-b123",
+ *        	"name": "After Testing",
+ *        	"assessmentId": "a1234567890",
+ *        	"collection": "workflow"
+ *        }
+ *      },
+ *      ...
+ *    ]
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
  */
+
 exports.all = (req, res) => {
   BASE_DB = nano(req.body.base_db);
   BASE_DB.view('ojai', 'byCollection', {
@@ -38,9 +72,33 @@ exports.all = (req, res) => {
 }
 
 /**
- * POST /workflow/headers/:id
- * returns processed metadata for a workflow
+ * Generates headers for a workflow.
+ *
+ * Example:
+ *
+ *    POST /workflow/headers/:id
+ *  where id refers to the id of the workflow document.
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the generated headers will be saved.
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *       }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
  */
+
 exports.getHeaders = (req, res) => {
   DB_URL = req.body.base_db;
   BASE_DB = nano(DB_URL);
@@ -63,9 +121,10 @@ exports.getHeaders = (req, res) => {
 
 /**
  * This function creates headers for a workflow.
- * @param {string} docId worklfow id of the document.
- * @returns {Array} generated headers for csv.
+ * @param {string} docId - worklfow id of the document.
+ * @returns {Array} - generated headers for csv.
  */
+
 const createWorkflowHeaders = function(docId) {
   let workflowHeaders = [];
 
@@ -105,9 +164,10 @@ const createWorkflowHeaders = function(docId) {
 
 /**
  * This function retrieves a document from the database.
- * @param {string} docId id of document.
- * @returns {Object} retrieved document.
+ * @param {string} docId - id of document.
+ * @returns {Object} - retrieved document.
  */
+
 function retrieveDoc(docId) {
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {

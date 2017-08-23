@@ -1,12 +1,14 @@
 /**
  * This file processes the result of an assessment.
  * The processed result will serve as the values for CSV generation.
- * It also exposes the generateResult and saveResult modules.
+ *
+ * Modules: generateResult, saveResult.
  */
 
 /**
  * Module dependencies
  */
+
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
@@ -15,11 +17,13 @@ const nano = require('nano');
 /**
  * Declare database variables
  */
+
 let RESULT_DB, BASE_DB;
 
 /**
  * Define value maps for grid and survey values.
  */
+
 const gridValueMap = {
   'correct': '1',
   'incorrect': '0',
@@ -37,11 +41,56 @@ const surveyValueMap = {
 };
 
 /**
- * POST /result
- * returns all result collection.
+ * Retrieves all result collection in the database.
+ *
+ * Example:
+ *
+ *    POST /result
+ *
+ *  The request object must contain the database url
+ *       {
+ *         "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       }
+ *
+ * Response:
+ *
+ *  Returns an Array of objects of result collections.
+ *    [
+ *    	{
+ *        "id": "a1234567890",
+ *        "key": "assessment",
+ *        "value": {
+ *        	"r": "1-b123"
+ *        },
+ *        "doc": {
+ *        	"_id": "a1234567890",
+ *        	"_rev": "1-b123",
+ *        	"name": "After Testing",
+ *        	"assessmentId": "a1234567890",
+ *          "assessmentName": "Test Result"
+ *          "subtestData": [
+ *            {
+ *              "name": "I am a location data"
+ *              "data": {}
+ *           },
+ *            {
+ *              "name": "just a datetime subtest prototype"
+ *              "data": {}
+ *            }
+ *          ]
+ *        	"collection": "result"
+ *        }
+ *      },
+ *      ...
+ *    ]
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
  */
+
 exports.all = (req, res) => {
   BASE_DB = nano(req.body.base_db);
+  // TODO: Remove the limit param.
   BASE_DB.list({ limit: 100, include_docs: true }, (err, body) => {
     if (err) res.json(err);
     res.json(body.rows);
@@ -49,17 +98,46 @@ exports.all = (req, res) => {
 }
 
 /**
- * POST /result/:id
- * returns processed result for an assessment.
+ * Processes result for an assessment and saves it in the database.
+ *
+ * Example:
+ *
+ *    POST /assessment/result/:id
+ *
+ *  where id refers to the id of the result document.
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the processed result will be saved.
+ *
+ * Request:
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *      }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
  */
+
 exports.get = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
+  let dbUrl = req.body.base_db;
+  BASE_DB = nano(dbUrl);
   RESULT_DB = nano(req.body.result_db);
   let parentId = req.params.id;
 
   retrieveDoc(parentId)
     .then((data) => {
-      return generateResult(data.assessmentId)
+      let docId = data.assessmentId || data.curriculumId;
+      return generateResult(docId, 0, dbUrl);
     })
     .then((result) => {
       return saveResult(result, parentId, RESULT_DB);
@@ -72,17 +150,21 @@ exports.get = (req, res) => {
 
 /**
  * This function processes the result for an assessment.
- * @param {string, number, string} [docId, count, dbUrl] assessmentId, count and database url.
- * @returns {Object} processed result for csv.
+ * @param {string} docId - assessment id.
+ * @param {number} count - count
+ * @param {stringg} dbUrl - database url.
+ * @returns {Object} - processed result for csv.
  */
+
 const generateResult = function(docId, count = 0, dbUrl) {
   let result = {};
-  BASE_DB = BASE_DB || nano(dbUrl);
+  BASE_DB = nano(dbUrl);
 
   return new Promise ((resolve, reject) => {
     getResultById(docId)
       .then((collections) => {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
+
         for (data of collections) {
           result[`${data.assessmentId}.assessmentId${assessmentSuffix}`] = data.assessmentId;
           result[`${data.assessmentId}.assessmentName${assessmentSuffix}`] = data.assessmentName;
@@ -162,11 +244,17 @@ const generateResult = function(docId, count = 0, dbUrl) {
   });
 }
 
+/**********************************************
+ *  HELPER FUNCTIONS FOR DATABASE QUERY       *
+ **********************************************
+*/
+
 /**
  * This function retrieves a document from the database.
- * @param {string} docId id of document.
- * @returns {Object} retrieved document.
+ * @param {string} docId - id of document.
+ * @returns {Object} - retrieved document.
  */
+
 function retrieveDoc(docId) {
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
@@ -176,11 +264,14 @@ function retrieveDoc(docId) {
   });
 }
 
-/**
+ /**
  * This function inserts a document in the database.
- * @param {string, string, string} [docs, key, resultDB] document, key and database.
- * @returns {Object} saved document.
+ * @param {Array} docs - document to be saved.
+ * @param {string} key - key for indexing.
+ * @param {Objext} resultDB - the result database.
+ * @returns {Object} - saved document.
  */
+
 const saveResult = function(docs, key, resultDB) {
   return new Promise((resolve, reject) => {
     resultDB.insert({ processed_results: docs }, key, (err, body) => {
@@ -192,11 +283,13 @@ const saveResult = function(docs, key, resultDB) {
 
 /**
  * This function retrieves a result document.
- * @param {string} docId id of document.
- * @returns {Array} result documents.
+ * @param {string} docId - id of document.
+ * @returns {Array} - result documents.
  */
+
 function getResultById(docId) {
   return new Promise((resolve, reject) => {
+    // TODO: Remove the limit param.
     BASE_DB.view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
       if (err) reject(err);
       let resultCollection = [];
@@ -211,11 +304,19 @@ function getResultById(docId) {
 
 }
 
+/***********************************************
+ *  HELPER FUNCTIONS FOR PROCESSING RESULTS   *
+ *  FOR DIFFERENT PROTOTYPES                  *
+ **********************************************
+*/
+
 /**
  * This function processes result for a location prototype.
- * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
  * @returns {Object} processed location data.
  */
+
 function processLocationResult(body, subtestCounts) {
   let count = subtestCounts.locationCount;
   let i, locationResult = {};
@@ -235,9 +336,11 @@ function processLocationResult(body, subtestCounts) {
 
 /**
  * This function processes result for a datetime prototype.
- * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
  * @returns {Object} processed datetime data.
  */
+
 function processDatetimeResult(body, subtestCounts) {
   let count = subtestCounts.datetimeCount;
   let suffix = count > 0 ? `_${count}` : '';
@@ -253,9 +356,11 @@ function processDatetimeResult(body, subtestCounts) {
 
 /**
  * This function processes a consent prototype subtest data.
- * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
  * @returns {Object} processed consent data.
  */
+
 function processConsentResult(body, subtestCounts) {
   let count = subtestCounts.consentCount;
   let suffix = count > 0 ? `_${count}` : '';
@@ -268,9 +373,11 @@ function processConsentResult(body, subtestCounts) {
 
 /**
  * This function processes an id prototype subtest data.
- * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
  * @returns {Object} processed id data.
  */
+
 function processIDResult(body, subtestCounts) {
   let count = subtestCounts.idCount;
   let suffix = count > 0 ? `_${count}` : '';
@@ -283,9 +390,11 @@ function processIDResult(body, subtestCounts) {
 
 /**
  * This function processes a survey prototype subtest data.
- * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
  * @returns {Object} processed survey data.
  */
+
 function processSurveyResult(body, subtestCounts) {
   let count = subtestCounts.surveyCount;
   let surveyResult = {};
@@ -308,9 +417,11 @@ function processSurveyResult(body, subtestCounts) {
 
 /**
  * This function processes a grid prototype subtest data.
- * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
  * @returns {Object} processed grid data.
  */
+
 function processGridResult(body, subtestCounts) {
   let count = subtestCounts.gridCount;
   let varName = body.data.variable_name || body.name.toLowerCase().replace(/\s/g, '_');
@@ -336,9 +447,11 @@ function processGridResult(body, subtestCounts) {
 
 /**
  * This function processes a gps prototype subtest data.
- * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
  * @returns {Object} processed gps data.
  */
+
 function processGpsResult(doc, subtestCounts) {
   let count = subtestCounts.gpsCount;
   let gpsResult = {};
@@ -358,9 +471,11 @@ function processGpsResult(doc, subtestCounts) {
 
 /**
  * This function processes a camera prototype subtest data.
- * @param {Object, Object} [body, subtestCounts] document to be processed and the count.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
  * @returns {Object} processed camera data.
  */
+
 function processCamera(body, subtestCounts) {
   let count = subtestCounts.cameraCount;
   let cameraResult = {};
@@ -375,10 +490,12 @@ function processCamera(body, subtestCounts) {
 }
 
 /**
- * This function maps survey result to a survey map value.
- * @param {string} databaseValue result value to be mapped.
- * @returns {string} translated survey value.
+ * This function maps a value in a result doc to a
+ * value that will be represented in a csv file.
+ * @param {string} databaseValue - result value to be mapped.
+ * @returns {string} - translated survey value.
  */
+
 function translateSurveyValue(databaseValue) {
   if (databaseValue == null) {
     databaseValue = 'no_record';
@@ -387,10 +504,12 @@ function translateSurveyValue(databaseValue) {
 };
 
 /**
- * This function maps grid result to a grid map value.
- * @param {string} databaseValue result value to be mapped.
- * @returns {string} translated grid value.
+ * This function maps a value in a result doc to a
+ * value that will be represented in a csv file.
+ * @param {string} databaseValue - result value to be mapped.
+ * @returns {string} - translated grid value.
  */
+
 function translateGridValue(databaseValue) {
   if (databaseValue == null) {
     databaseValue = 'no_record';

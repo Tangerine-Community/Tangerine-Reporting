@@ -1,11 +1,13 @@
 /**
  * This file generates a CSV file.
- * It also exposes the generateCSV module.
+ *
+ * Module: generateCSV
  */
 
 /**
  * Module dependencies
  */
+
 const _ = require('lodash');
 const chalk = require('chalk');
 const Excel = require('exceljs');
@@ -14,18 +16,40 @@ const nano = require('nano');
 /**
  * Declare database variables.
  */
+
 let BASE_DB, RESULT_DB;
 
 /**
  * Local modules.
  */
+
 const createHeaders = require('./assessment').createColumnHeaders;
 const processResult = require('./result').generateResult;
 
 /**
- * POST /generate
- * generate a csv file.
-*/
+ * Generates a CSV file.
+ *
+ * Example:
+ *
+ *    POST /generate_csv
+ *
+ *  The request object must contain the database url, result database url,
+ *  generated header document id and the processed result document id.
+ *       {
+ *         "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *         "another_url": "http://admin:password@test.tangerine.org/database_name"
+ *         "generated_header_doc_id": "0000B40F-4F39-494E-A363-D04F5EFA4744"
+ *         "processed_result_doc_id": "e61318ac-e134-0321-9c23-a9e60fc8a6ae"
+ *       }
+ *
+ * Response:
+ *
+ * Returns the processed result.
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+
 exports.generate = (req, res) => {
   BASE_DB = nano(req.body.base_db);
   RESULT_DB = nano(req.body.result_db);
@@ -47,9 +71,10 @@ exports.generate = (req, res) => {
 
 /**
  * This function retrieves a document from the database.
- * @param {string} docId id of document.
- * @returns {Object} retrieved document.
+ * @param {string} docId - id of document.
+ * @returns {Object} - retrieved document.
  */
+
 const getDocument = function(docId) {
   return new Promise((resolve, reject) => {
     RESULT_DB.get(docId, (err, body) => {
@@ -61,9 +86,11 @@ const getDocument = function(docId) {
 
 /**
  * This function generates a CSV file.
- * @param {Object, Object} [colSettings,resultData] headers and result data.
- * @returns {Object} retrieved document.
+ * @param {Object} colSettings – column headers
+ * @param {Object} resultData – the result data.
+ * @returns {Object} – retrieved document.
  */
+
 const generateCSV = function(colSettings, resultData) {
   let workbook = new Excel.Workbook();
   workbook.creator = 'Brockman';
@@ -84,11 +111,9 @@ const generateCSV = function(colSettings, resultData) {
   let filename = `testcsvfile-${creationTime}.xlsx`;
 
   // create and fill Workbook;
-  workbook.xlsx
-    .writeFile(filename, 'utf8')
+  workbook.xlsx.writeFile(filename, 'utf8')
     .then(() => {
       console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓'));
-
       return { message: 'CSV Successfully Generated' };
     })
     .catch((err) => Error(err));

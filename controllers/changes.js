@@ -1,12 +1,13 @@
 /**
  * This file implements couch DB changes features.
  * It watches for any changes in the database and
- * processes the changed document based on its type.
+ * processes the changed document based on its collection type.
  */
 
 /**
  * Module Dependencies.
  */
+
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
@@ -15,6 +16,7 @@ const nano = require('nano');
 /**
  * Local modules.
  */
+
 const generateAssessmentHeaders = require('./assessment').createColumnHeaders;
 const processAssessmentResult = require('./result').generateResult;
 const generateWorkflowHeaders = require('./workflow').createWorkflowHeaders;
@@ -23,12 +25,39 @@ const processWorkflowResult = require('./workflow').processWorkflowResult;
 /**
  * Declare database variable.
  */
+
 let BASE_DB;
 
 /**
- * POST /tangerine_changes
- * returns the processed data for the changed document.
-*/
+ * Processes any recently changed document in the database based on its collection type.
+ *
+ * Example:
+ *
+ *    POST /tangerine_changes
+ *
+ *  The request object must contain the database url and the result database url.
+ *       {
+ *         "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *         "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *       }
+ *
+ * Response:
+ *
+ * Returns the changed document in the database.
+ *      {
+ *        "seq": 1001,
+ *        "id": "e1234567890",
+ *        "changes": [
+ *            {
+ *              "rev": "1-123a"
+ *            }
+ *        ]
+ *      }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+
 exports.changes = (req, res) => {
   BASE_DB = nano(req.body.base_db);
   const feed = BASE_DB.follow({ since: 'now', include_docs:true });

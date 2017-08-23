@@ -12,31 +12,57 @@ const _ = require('lodash');
 /**
  * Module dependencies.
  */
+
 const processResult = require('./result').generateResult;
 const saveResult = require('./result').saveResult;
 
 /**
  * Declare database variables.
  */
+
 let BASE_DB, DB_URL, RESULT_DB;
 
 /**
- * POST /workflow/result/:id
- * returns the processed result for a workflow.
-*/
+ * Processes result for a workflow.
+ *
+ * Example:
+ *
+ *    POST /workflow/result/:id
+ *  where id refers to the id of the workflow document.
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the generated headers will be saved.
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *       }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+
 exports.getResults = (req, res) => {
   DB_URL = req.body.base_db;
   BASE_DB = nano(DB_URL);
   RESULT_DB = req.body.result_db;
-  let parentId;
+  let tripId;
 
   getWorkflowDoc(req.params.id)
     .then((doc) => {
-      parentId = doc.tripId;
+      tripId = doc.tripId;
       return processWorkflowResult(doc.workflowId);
     })
     .then((result) => {
-      return saveResult(result, parentId, RESULT_DB);
+      return saveResult(result, tripId, RESULT_DB);
     })
     .then((data) => {
       res.json(data);
@@ -46,9 +72,10 @@ exports.getResults = (req, res) => {
 
 /**
  * This function processes the result for a workflow.
- * @param {string} docId worklfow id of the document.
- * @returns {Object} processed result for csv.
+ * @param {string} docId - worklfow id of the document.
+ * @returns {Object} - processed result for csv.
  */
+
 const processWorkflowResult = function(docId) {
   let workflowResults = {};
 
@@ -87,9 +114,10 @@ const processWorkflowResult = function(docId) {
 
 /**
  * This function retrieves a document from the database.
- * @param {string} docId id of document.
- * @returns {Object} retrieved document.
+ * @param {string} docId - id of document.
+ * @returns {Object} - retrieved document.
  */
+
 function getWorkflowDoc(docId) {
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {

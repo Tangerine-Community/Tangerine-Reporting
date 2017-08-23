@@ -38,9 +38,9 @@ const tripController = require('./controllers/trip');
  * App routes.
  */
 app.post('/assessment', assessmentController.all);
-app.post('/assessment/:id', assessmentController.get);
 app.post('/result', resultController.all);
-app.post('/result/:id', resultController.get);
+app.post('/assessment/headers/:id', assessmentController.get);
+app.post('/assessment/result/:id', resultController.get);
 app.post('/workflow', workflowController.all);
 app.post('/workflow/headers/:id', workflowController.getHeaders);
 app.post('/workflow/result/:id', tripController.getResults);
