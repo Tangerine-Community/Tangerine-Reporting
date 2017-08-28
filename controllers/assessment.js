@@ -1,220 +1,335 @@
-// Module dependencies.
+/**
+ * This file creates headers or metadata from an assessment.
+ * These headers or metadata will serve as column headers for CSV generation.
+ *
+ * Modules: createColumnHeaders, saveHeaders.
+ */
+
+/**
+ * Module dependencies.
+ */
+
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
-
-// Connect to Couch DB
 const nano = require('nano');
-const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
-const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 
 /**
- * GET /assessment
- * return all assessments
+ * Declare database variables.
  */
+
+let RESULT_DB, BASE_DB;
+
+/**
+ * Retrieves all assessment collection in the database.
+ *
+ * Example:
+ *
+ *    POST /assessment
+ *
+ *  The request object must contain the database url
+ *       {
+ *         "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       }
+ *
+ * Response:
+ *
+ *  Returns an Array of objects of assessment collections.
+ *    [
+ *    	{
+ *        "id": "a1234567890",
+ *        "key": "assessment",
+ *        "value": {
+ *        	"r": "1-b123"
+ *        },
+ *        "doc": {
+ *        	"_id": "a1234567890",
+ *        	"_rev": "1-b123",
+ *        	"name": "After Testing",
+ *        	"assessmentId": "a1234567890",
+ *        	"collection": "assessment"
+ *        }
+ *      },
+ *      ...
+ *    ]
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+
 exports.all = (req, res) => {
-  TMP_TANGERINEDB
-    .view('ojai', 'byCollection', {
-      key: 'assessment',
-      include_docs: true
-    }, (err, body) => {
-      if (err) res.send(err);
-      res.json(body.rows)
-    });
+  BASE_DB = nano(req.body.base_db);
+  BASE_DB.view('ojai', 'byCollection', {
+    key: 'assessment',
+    include_docs: true
+  }, (err, body) => {
+    if (err) res.send(err);
+    res.json(body.rows);
+  });
 }
 
 /**
- * GET /assessment/:id
- * return all headers and keys for a particuler assessment
+ * Generates headers for an assessment and saves it in the database.
+ *
+ * Example:
+ *
+ *    POST /assessment/headers/:id
+ *
+ *  where id refers to the id of the assessment document.
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the generated header will be saved.
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *      }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
  */
+
 exports.get = (req, res) => {
-  let assessments = [];
+  BASE_DB = nano(req.body.base_db);
+  RESULT_DB = nano(req.body.result_db);
   let assessmentId = req.params.id;
 
-  getAssessment(assessmentId)
-    .then((item) => {
-      assessments.push({ header: 'assessment_id', key: item.assessmentId + '.assessmentId' });
-      assessments.push({ header: 'assessment_name', key: item.assessmentId + '.assessmentName' });
-      assessments.push({ header: 'enumerator', key: item.assessmentId + '.enumerator' });
-      assessments.push({ header: 'start_time', key: item.assessmentId + '.start_time' });
-      assessments.push({ header: 'order_map', key: item.assessmentId + '.order_map' });
-
-      return getSubtests(assessmentId);
+  createColumnHeaders(assessmentId)
+    .then((result) => {
+      return saveHeaders(result, assessmentId, RESULT_DB);
     })
-    .then(async(subtestData) => {
-      let subtestCounts = {
-        locationCount: 0,
-        datetimeCount: 0,
-        idCount: 0,
-        consentCount: 0,
-        gpsCount: 0,
-        cameraCount: 0,
-        surveyCount: 0,
-        gridCount: 0,
-        timestampCount: 0
-      };
-
-      for (data of subtestData) {
-        if (data.prototype === 'location') {
-          let location = createLocation(data, subtestCounts);
-          assessments = assessments.concat(location);
-          subtestCounts.locationCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'datetime') {
-          let datetime = createDatetime(data, subtestCounts);
-          assessments = assessments.concat(datetime);
-          subtestCounts.datetimeCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'consent') {
-          let consent = createConsent(data, subtestCounts);
-          assessments = assessments.concat(consent);
-          subtestCounts.consentCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'id') {
-          let id = createId(data, subtestCounts);
-          assessments = assessments.concat(id);
-          subtestCounts.idCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'survey') {
-          let surveys = await createSurvey(data._id, subtestCounts);
-          assessments = assessments.concat(surveys);
-          subtestCounts.surveyCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'grid' && subtestCounts.gridCount < 1) {
-          let grid = await createGrid(data, subtestCounts);
-          assessments = assessments.concat(grid.gridHeader);
-          subtestCounts.gridCount++;
-          subtestCounts.timestampCount = grid.timestampCount;
-        }
-        if (data.prototype === 'gps') {
-          let gps = createGps(data, subtestCounts);
-          assessments = assessments.concat(gps);
-          subtestCounts.gpsCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (data.prototype === 'camera') {
-          let camera = createCamera(data, subtestCounts);
-          assessments = assessments.concat(camera);
-          subtestCounts.cameraCount++;
-          subtestCounts.timestampCount++;
-        }
-      }
-      assessments.push({ header: `end_time`, key: `${assessmentId}.end_time` });
-
-      return insertDoc(assessments, assessmentId);
+    .then((data) => {
+      res.json(data);
     })
-    .then(() => res.json(assessments))
-    .catch((err) => {
-      res.json(Error(err));
-    });
+    .catch((err) => res.send(Error(err)));
+}
+
+/**
+ * This function processes the headers for an assessment.
+ * @param {string, number, string} [docTypeId, count, dbUrl] assessmentId, count and database url.
+ * @returns {Object} processed headers for csv.
+ */
+
+const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
+  let assessments = [];
+  BASE_DB = BASE_DB || nano(dbUrl);
+
+  return new Promise((resolve, reject) => {
+    getAssessment(docTypeId)
+      .then((item) => {
+        if (item.assessmentId) {
+          let assessmentSuffix = count > 0 ? `_${count}` : '';
+          assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${item.assessmentId}.assessmentId${assessmentSuffix}` });
+          assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${item.assessmentId}.assessmentName${assessmentSuffix}` });
+          assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${item.assessmentId}.enumerator${assessmentSuffix}` });
+          assessments.push({ header: `start_time${assessmentSuffix}`, key: `${item.assessmentId}.start_time${assessmentSuffix}` });
+          assessments.push({ header: `order_map${assessmentSuffix}`, key: `${item.assessmentId}.order_map${assessmentSuffix}` });
+        }
+        return getSubtests(docTypeId);
+      })
+      .then(async(subtestData) => {
+        let subtestCounts = {
+          locationCount: 0,
+          datetimeCount: 0,
+          idCount: 0,
+          consentCount: 0,
+          gpsCount: 0,
+          cameraCount: 0,
+          surveyCount: 0,
+          gridCount: 0,
+          timestampCount: 0
+        };
+
+        for (data of subtestData) {
+          if (data.prototype === 'location') {
+            let location = createLocation(data, subtestCounts);
+            assessments = assessments.concat(location);
+            subtestCounts.locationCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'datetime') {
+            let datetime = createDatetime(data, subtestCounts);
+            assessments = assessments.concat(datetime);
+            subtestCounts.datetimeCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'consent') {
+            let consent = createConsent(data, subtestCounts);
+            assessments = assessments.concat(consent);
+            subtestCounts.consentCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'id') {
+            let id = createId(data, subtestCounts);
+            assessments = assessments.concat(id);
+            subtestCounts.idCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'survey') {
+            let surveys = await createSurvey(data._id, subtestCounts);
+            assessments = assessments.concat(surveys);
+            subtestCounts.surveyCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'grid') {
+            let grid = await createGrid(data, subtestCounts);
+            assessments = assessments.concat(grid.gridHeader);
+            subtestCounts.gridCount++;
+            subtestCounts.timestampCount = grid.timestampCount;
+          }
+          if (data.prototype === 'gps') {
+            let gps = createGps(data, subtestCounts);
+            assessments = assessments.concat(gps);
+            subtestCounts.gpsCount++;
+            subtestCounts.timestampCount++;
+          }
+          if (data.prototype === 'camera') {
+            let camera = createCamera(data, subtestCounts);
+            assessments = assessments.concat(camera);
+            subtestCounts.cameraCount++;
+            subtestCounts.timestampCount++;
+          }
+        }
+        let assessmentSuffix = count > 0 ? `_${count}` : '';
+        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docTypeId}.end_time${assessmentSuffix}` });
+
+        resolve(assessments);
+      })
+      .catch((err) => reject(err));
+  });
 
 }
 
-// Save docs into results DB
-function insertDoc(docs, ref) {
+/**********************************************
+ *  HELPER FUNCTIONS FOR DATABASE QUERY       *
+ **********************************************
+*/
+
+/**
+ * This function inserts headers in the database.
+ * @param {Array} docs - document to be saved.
+ * @param {string} ref - key for indexing.
+ * @param {Object} resultDB - the result database.
+ * @returns {Object} saved document.
+ */
+
+const saveHeaders = function(docs, ref, resultDB) {
   return new Promise((resolve, reject) => {
-    RESULT_DB.insert({ column_headers: docs }, ref, (err, body) => {
+    resultDB.insert({ column_headers: docs }, ref, (err, body) => {
       if (err) reject(err);
       resolve(body);
     });
   });
 }
 
-// Get a particular assessment collection
+/**
+ * This function retrieves an assessment document.
+ * @param {string} id - id of document.
+ * @returns {Object} - assessment documents.
+ */
+
 function getAssessment(id) {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
-      .get(id, { include_docs: true }, (err, body) => {
-        if (err) reject(err);
-        resolve(body);
-      });
+    BASE_DB.get(id, { include_docs: true }, (err, body) => {
+      if (err) reject(err);
+      resolve(body);
+    });
   });
 }
 
-// Get all results collection
+/**
+ * This function retrieves all result collection.
+ * @returns {Array} - result documents.
+ */
+
 function getResults() {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
-      .view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
-        if (err) reject(err);
-        let doc = _.map(body.rows, (data) => {
-          return data.doc;
-        });
-        resolve(doc);
+    // TODO: Remove the limit param.
+    BASE_DB.view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
+      if (err) reject(err);
+      let doc = _.map(body.rows, (data) => {
+        return data.doc;
       });
+      resolve(doc);
+    });
   });
 }
 
-// Get all subtest collection
+/**
+ * This function retrieves all subtest linked to an assessment.
+ * @param {string} id - id of assessment document.
+ * @returns {Array} - subtest documents.
+ */
+
 function getSubtests(id) {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
-      .view('ojai', 'subtestsByAssessmentId', {
-        key: id,
-        include_docs: true
-      }, (err, body) => {
-        if (err) reject(err);
-        let subtestDoc = [];
-        _.each(body.rows, (data) => {
-          subtestDoc.push(data.doc);
-        });
-        let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
-        resolve(orderedSubtests);
-      })
+    BASE_DB.view('ojai', 'subtestsByAssessmentId', {
+      key: id,
+      include_docs: true
+    }, (err, body) => {
+      if (err) reject(err);
+      let subtestDoc = [];
+      _.each(body.rows, (data) => {
+        subtestDoc.push(data.doc);
+      });
+      let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
+      resolve(orderedSubtests);
+    })
   });
 }
 
-// Get all question collection
-function getQuestions(id) {
-  return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
-      .view('ojai', 'questionsByParentId', {
-        key: id,
-        include_docs: true
-      }, (err, body) => {
-        if (err) reject(err);
-        let questionDoc = [];
-        _.each(body.rows, (data) => {
-          questionDoc.push(data.doc);
-        });
-        let orderedQuestion = _.sortBy(questionDoc, ['order']);
-        resolve(orderedQuestion);
-      })
-  });
-}
+/**
+ * This function retrieves all questions linked to a subtest document.
+ * @param {string} subtestId - id of subtest document.
+ * @returns {Array} - question documents.
+ */
 
-// Get all questions associated with a particular subtest
 function getQuestionBySubtestId(subtestId) {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
-      .view('ojai', 'questionsByParentId', {
-        key: subtestId,
-        include_docs: true
-      }, (err, body) => {
-        if (err) reject(err);
-        let doc = _.map(body.rows, (data) => {
-          return data.doc;
-        });
-        resolve(doc);
+    BASE_DB.view('ojai', 'questionsByParentId', {
+      key: subtestId,
+      include_docs: true
+    }, (err, body) => {
+      if (err) reject(err);
+      let doc = _.map(body.rows, (data) => {
+        return data.doc;
       });
+      resolve(doc);
+    });
   });
 }
 
-// create location prototype column data
+/***********************************************
+ *  HELPER FUNCTIONS FOR CREATING HEADERS     *
+ *        FOR DIFFERENT PROTOTYPES            *
+ **********************************************
+*/
+
+/**
+ * This function creates headers for location prototypes.
+ * @param {Object} doc - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Array} - generated location headers.
+ */
+
 function createLocation(doc, subtestCounts) {
   let count = subtestCounts.locationCount;
   let locationHeader = [];
-  let labels = doc.locationCols;
+  let labels = doc.levels;
+
   for (i = 0; i < labels.length; i++) {
     let locSuffix = count > 0 ? `_${count}` : '';
     locationHeader.push({
       header: `${labels[i]}${locSuffix}`,
-      key: `${doc._id}.${labels[i]}${locSuffix}`
+      key: `${doc._id}.${labels[i].toLowerCase()}${locSuffix}`
     });
   }
   locationHeader.push({
@@ -225,7 +340,13 @@ function createLocation(doc, subtestCounts) {
   return locationHeader;
 }
 
-// Create datetime prototype column data
+/**
+ * This function creates headers for datetime prototypes.
+ * @param {Object} doc - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Array} - generated datetime headers.
+ */
+
 function createDatetime(doc, subtestCounts) {
   let count = subtestCounts.datetimeCount;
   let suffix, datetimeHeader = [];
@@ -240,7 +361,13 @@ function createDatetime(doc, subtestCounts) {
   return datetimeHeader;
 }
 
-// Create consent prototype column data
+/**
+ * This function creates headers for consent prototypes.
+ * @param {Object} doc - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Array} - generated consent headers.
+ */
+
 function createConsent(doc, subtestCounts) {
   let count = subtestCounts.consentCount;
   let suffix, consentHeader = [];
@@ -252,7 +379,13 @@ function createConsent(doc, subtestCounts) {
   return consentHeader;
 }
 
-// Create Id prototype column data
+/**
+ * This function creates headers for id prototypes.
+ * @param {Object} doc - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Array} - generated id headers.
+ */
+
 function createId(doc, subtestCounts) {
   let count = subtestCounts.idCount;
   let suffix, idHeader = [];
@@ -264,7 +397,13 @@ function createId(doc, subtestCounts) {
   return idHeader;
 }
 
-// Create survey prototype column data
+/**
+ * This function creates headers for survey prototypes.
+ * @param {Object} id - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Array} - generated survey headers.
+ */
+
 async function createSurvey(id, subtestCounts) {
   let count = subtestCounts.surveyCount;
   let surveyHeader = [];
@@ -273,20 +412,22 @@ async function createSurvey(id, subtestCounts) {
   let sortedDoc = _.sortBy(questions, [id, 'order']);
 
   for (doc of sortedDoc) {
-    surveyHeader.push({
-      header: `${doc.name}${suffix}`,
-      key: `${id}.${doc.name}${suffix}`
-    });
-    // TODO: Use this for meta data processing in the future
-    // let i = 0;
-    // for (i; i < doc.options.length; i++) {
-    //   let label = doc.options[i].label.trim();
-    //   label = label.toLowerCase().replace(/\s/g, '_');
-    //   surveyHeader.push({
-    //     header: `${doc.name}${suffix}`,
-    //     key: `${id}.${doc.name}.${suffix}`
-    //   });
-    // }
+    let optionsLen = doc.options.length;
+    if (optionsLen <= 2) {
+      surveyHeader.push({
+        header: `${doc.name}${suffix}`,
+        key: `${id}.${doc.name}${suffix}`
+      });
+    }
+    else {
+      let i = 1;
+      for (i; i <= optionsLen; i++) {
+        surveyHeader.push({
+          header: `${doc.name}_${i}${suffix}`,
+          key: `${id}.${doc.name}.${i}${suffix}`
+        });
+      }
+    }
   }
   surveyHeader.push({
     header: `timestamp_${subtestCounts.timestampCount}`,
@@ -296,17 +437,33 @@ async function createSurvey(id, subtestCounts) {
   return surveyHeader;
 }
 
-// Create grid prototype column data
+/**
+ * This function creates headers for grid prototypes.
+ * @param {Object} doc - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Array} - generated grid headers.
+ */
+
 async function createGrid(doc, subtestCounts) {
   let count = subtestCounts.gridCount;
   let gridHeader = [];
+  let gridData = [];
   let suffix = count > 0 ? `_${count}` : '';
   let resultDocs = await getResults();
-  let filteredResult = _.find(resultDocs, (result) => result.assessmentId === doc.assessmentId);
-  let gridData = _.filter(filteredResult.subtestData, (val) => val.prototype === 'grid');
+  let docId = doc.assessmentId || doc.curriculumId;
+
+  let filteredResult = _.filter(resultDocs, (result) => result.assessmentId === docId);
+
+  _.each(filteredResult, (item) => {
+    _.filter(item.subtestData, (value) => {
+      if(value.prototype === 'grid') {
+        gridData.push(value);
+      }
+    });
+  });
 
   for (sub of gridData) {
-    let i, items = sub.data.items;
+    let i; items = sub.data.items;
     let variableName = sub.data.variable_name || sub.name.toLowerCase().replace(/\s/g, '_');
 
     gridHeader.push({
@@ -351,7 +508,13 @@ async function createGrid(doc, subtestCounts) {
   return { gridHeader, timestampCount: subtestCounts.timestampCount };
 }
 
-// Create GPS prototype column data
+/**
+ * This function creates headers for gps prototypes.
+ * @param {Object} doc - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Array} - generated gps headers.
+ */
+
 function createGps(doc, subtestCounts) {
   let count = subtestCounts.gpsCount;
   let gpsHeader = [];
@@ -369,7 +532,13 @@ function createGps(doc, subtestCounts) {
   return gpsHeader;
 }
 
-// Create camera prototype column data
+/**
+ * This function creates headers for camera prototypes.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Array} - generated camera headers.
+ */
+
 function createCamera(doc, subtestCounts) {
   let count = subtestCounts.cameraCount;
   let cameraheader = [];
@@ -382,3 +551,7 @@ function createCamera(doc, subtestCounts) {
 
   return cameraheader;
 }
+
+exports.createColumnHeaders = createColumnHeaders;
+
+exports.saveHeaders = saveHeaders;

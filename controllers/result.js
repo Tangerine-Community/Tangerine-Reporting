@@ -1,159 +1,322 @@
-//  Module dependencies
+/**
+ * This file processes the result of an assessment.
+ * The processed result will serve as the values for CSV generation.
+ *
+ * Modules: generateResult, saveResult.
+ */
+
+/**
+ * Module dependencies
+ */
+
 const _ = require('lodash');
 const Excel = require('exceljs');
 const chalk = require('chalk');
-
-// Connect to Couch DB
 const nano = require('nano');
-const TMP_TANGERINEDB = nano('http://localhost:5984/tmp_tangerine');
-const RESULT_DB = nano('http://localhost:5984/tang_resultdb');
 
 /**
- * GET /result
- * return all results collection
+ * Declare database variables
  */
+
+let RESULT_DB, BASE_DB;
+
+/**
+ * Define value maps for grid and survey values.
+ */
+
+const gridValueMap = {
+  'correct': '1',
+  'incorrect': '0',
+  'missing': '.',
+  'skipped': '999',
+  'logicSkipped': '999'
+};
+
+const surveyValueMap = {
+  'checked': '1',
+  'unchecked': '0',
+  'not asked' : '.',
+  'skipped': '999',
+  'logicSkipped': '999'
+};
+
+/**
+ * Retrieves all result collection in the database.
+ *
+ * Example:
+ *
+ *    POST /result
+ *
+ *  The request object must contain the database url
+ *       {
+ *         "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       }
+ *
+ * Response:
+ *
+ *  Returns an Array of objects of result collections.
+ *    [
+ *    	{
+ *        "id": "a1234567890",
+ *        "key": "assessment",
+ *        "value": {
+ *        	"r": "1-b123"
+ *        },
+ *        "doc": {
+ *        	"_id": "a1234567890",
+ *        	"_rev": "1-b123",
+ *        	"name": "After Testing",
+ *        	"assessmentId": "a1234567890",
+ *          "assessmentName": "Test Result"
+ *          "subtestData": [
+ *            {
+ *              "name": "I am a location data"
+ *              "data": {}
+ *           },
+ *            {
+ *              "name": "just a datetime subtest prototype"
+ *              "data": {}
+ *            }
+ *          ]
+ *        	"collection": "result"
+ *        }
+ *      },
+ *      ...
+ *    ]
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+
 exports.all = (req, res) => {
-  TMP_TANGERINEDB
-    .view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
-      if (err) res.json(err);
-      let doc = _.map(body.rows, (data) => {
-        return data.doc;
-      });
-      res.json(doc.slice(0,10));
-    });
+  BASE_DB = nano(req.body.base_db);
+  // TODO: Remove the limit param.
+  BASE_DB.list({ limit: 100, include_docs: true }, (err, body) => {
+    if (err) res.json(err);
+    res.json(body.rows);
+  });
 }
 
 /**
- * GET /result/:id
- * return result for a particular assessment id
+ * Processes result for an assessment and saves it in the database.
+ *
+ * Example:
+ *
+ *    POST /assessment/result/:id
+ *
+ *  where id refers to the id of the result document.
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the processed result will be saved.
+ *
+ * Request:
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *      }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
  */
+
 exports.get = (req, res) => {
-  let assessmentId = req.params.id;
+  let dbUrl = req.body.base_db;
+  BASE_DB = nano(dbUrl);
+  RESULT_DB = nano(req.body.result_db);
+  let parentId = req.params.id;
+
+  retrieveDoc(parentId)
+    .then((data) => {
+      let docId = data.assessmentId || data.curriculumId;
+      return generateResult(docId, 0, dbUrl);
+    })
+    .then((result) => {
+      return saveResult(result, parentId, RESULT_DB);
+    })
+    .then((saved) => {
+      res.json(saved);
+    })
+    .catch((err) => res.send(Error(err)));
+}
+
+/**
+ * This function processes the result for an assessment.
+ * @param {string} docId - assessment id.
+ * @param {number} count - count
+ * @param {string} dbUrl - database url.
+ * @returns {Object} - processed result for csv.
+ */
+
+const generateResult = function(docId, count = 0, dbUrl) {
   let result = {};
+  BASE_DB = nano(dbUrl);
 
-  getResultById(assessmentId)
-    .then((data) => {
-      result[`${data.assessmentId}.assessmentId`] = data.assessmentId;
-      result[`${data.assessmentId}.assessmentName`] = data.assessmentName;
-      result[`${data.assessmentId}.enumerator`] = data.enumerator;
-      result[`${data.assessmentId}.start_time`] = data.start_time;
-      result[`${data.assessmentId}.order_map`] = data.order_map.join(',');
+  return new Promise ((resolve, reject) => {
+    getResultById(docId)
+      .then((collections) => {
+        let assessmentSuffix = count > 0 ? `_${count}` : '';
 
-      let subtestCounts = {
-        locationCount: 0,
-        datetimeCount: 0,
-        idCount: 0,
-        consentCount: 0,
-        gpsCount: 0,
-        cameraCount: 0,
-        surveyCount: 0,
-        gridCount: 0,
-        timestampCount: 0
-      };
+        for (data of collections) {
+          result[`${data.assessmentId}.assessmentId${assessmentSuffix}`] = data.assessmentId;
+          result[`${data.assessmentId}.assessmentName${assessmentSuffix}`] = data.assessmentName;
+          result[`${data.assessmentId}.enumerator${assessmentSuffix}`] = data.enumerator;
+          result[`${data.assessmentId}.start_time${assessmentSuffix}`] = data.start_time;
+          result[`${data.assessmentId}.order_map${assessmentSuffix}`] = data.order_map ? data.order_map.join(',') : '';
 
-      for (doc of data.subtestData) {
-        if (doc.prototype === 'location') {
-          let location = processLocationResult(doc, subtestCounts);
-          result = _.assignIn(result, location);
-          subtestCounts.locationCount++;
-          subtestCounts.timestampCount++;
+          let subtestCounts = {
+            locationCount: 0,
+            datetimeCount: 0,
+            idCount: 0,
+            consentCount: 0,
+            gpsCount: 0,
+            cameraCount: 0,
+            surveyCount: 0,
+            gridCount: 0,
+            timestampCount: 0
+          };
+
+          for (doc of data.subtestData) {
+            if (doc.prototype === 'location') {
+              let location = processLocationResult(doc, subtestCounts);
+              result = _.assignIn(result, location);
+              subtestCounts.locationCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'datetime') {
+              let datetime = processDatetimeResult(doc, subtestCounts);
+              result = _.assignIn(result, datetime);
+              subtestCounts.datetimeCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'consent') {
+              let consent = processConsentResult(doc, subtestCounts);
+              result = _.assignIn(result, consent);
+              subtestCounts.consentCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'id') {
+              let id = processIDResult(doc, subtestCounts);
+              result = _.assignIn(result, id);
+              subtestCounts.idCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'survey') {
+              let survey = processSurveyResult(doc, subtestCounts);
+              result = _.assignIn(result, survey);
+              subtestCounts.surveyCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'grid') {
+              let grid = processGridResult(doc, subtestCounts);
+              result = _.assignIn(result, grid);
+              subtestCounts.gridCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'gps') {
+              let gps = processGpsResult(doc, subtestCounts);
+              result = _.assignIn(result, gps);
+              subtestCounts.gpsCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'camera') {
+              let camera = processCamera(doc, subtestCounts);
+              result = _.assignIn(result, camera);
+              subtestCounts.cameraCount++;
+              subtestCounts.timestampCount++;
+            }
+            if (doc.prototype === 'complete') {
+              result[`${data.assessmentId}.end_time${assessmentSuffix}`] = doc.data.end_time;
+            }
+          }
         }
-        if (doc.prototype === 'datetime') {
-          let datetime = processDatetimeResult(doc, subtestCounts);
-          result = _.assignIn(result, datetime);
-          subtestCounts.datetimeCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'consent') {
-          let consent = processConsentResult(doc, subtestCounts);
-          result = _.assignIn(result, consent);
-          subtestCounts.consentCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'id') {
-          let id = processIDResult(doc, subtestCounts);
-          result = _.assignIn(result, id);
-          subtestCounts.idCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'survey') {
-          let survey = processSurveyResult(doc, subtestCounts);
-          result = _.assignIn(result, survey);
-          subtestCounts.surveyCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'grid') {
-          let grid = processGridResult(doc, subtestCounts);
-          result = _.assignIn(result, grid);
-          subtestCounts.gridCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'gps') {
-          let gps = processGpsResult(doc, subtestCounts);
-          result = _.assignIn(result, gps);
-          subtestCounts.gpsCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'camera') {
-          let camera = processCamera(doc, subtestCounts);
-          result = _.assignIn(result, camera);
-          subtestCounts.cameraCount++;
-          subtestCounts.timestampCount++;
-        }
-        if (doc.prototype === 'complete') {
-          result[`${data.assessmentId}.end_time`] = doc.data.end_time;
-        }
-      }
-      return saveResult(result, assessmentId);
-    })
-    .then(() => getResultHeaders(assessmentId))
-    .then((data) => {
-      let genCSV = generateCSV(data, result);
-      res.json(result);
-    })
-    .catch((err) => {
-      res.json(Error(err));
-    });
+        resolve(result);
+      })
+      .catch((err) => reject(err));
+  });
 }
 
-// Save doc into result DB
-function saveResult(docs, id) {
-  let ref = `${id}-result`;
+/**********************************************
+ *  HELPER FUNCTIONS FOR DATABASE QUERY       *
+ **********************************************
+*/
+
+/**
+ * This function retrieves a document from the database.
+ * @param {string} docId - id of document.
+ * @returns {Object} - retrieved document.
+ */
+
+function retrieveDoc(docId) {
+  return new Promise ((resolve, reject) => {
+    BASE_DB.get(docId, (err, body) => {
+      if (err) reject(err);
+      resolve(body)
+    });
+  });
+}
+
+/**
+ * This function inserts a document in the database.
+ * @param {Array} docs - document to be saved.
+ * @param {string} key - key for indexing.
+ * @param {Object} resultDB - the result database.
+ * @returns {Object} - saved document.
+ */
+
+const saveResult = function(docs, key, resultDB) {
   return new Promise((resolve, reject) => {
-    RESULT_DB.insert({ processed_results: docs }, ref, (err, body) => {
+    resultDB.insert({ processed_results: docs }, key, (err, body) => {
       if (err) reject(err);
       resolve(body);
     });
   });
 }
 
-// Get result headers from result_db
-function getResultHeaders(docId) {
-  return new Promise((resolve, reject) => {
-    RESULT_DB.get(docId, (err, body) => {
-      if (err) reject(err);
-      resolve(body);
-    });
-  });
-}
+/**
+ * This function retrieves a result document.
+ * @param {string} docId - id of document.
+ * @returns {Array} - result documents.
+ */
 
-// Get result collection by assessment id
 function getResultById(docId) {
   return new Promise((resolve, reject) => {
-    TMP_TANGERINEDB
-      .view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
-        if (err) reject(err);
-        let doc = _.map(body.rows, (data) => {
-          return data.doc;
-        });
-        resultDoc = _.find(doc, (data) => data.assessmentId === docId);
-        resolve(resultDoc);
+    // TODO: Remove the limit param.
+    BASE_DB.view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
+      if (err) reject(err);
+      let resultCollection = [];
+      _.filter(body.rows, (data) => {
+        if (data.doc.assessmentId === docId) {
+          resultCollection.push(data.doc);
+        }
       });
+      resolve(resultCollection);
+    });
   })
 
 }
 
-// Generate location prototype result
+/***********************************************
+ *  HELPER FUNCTIONS FOR PROCESSING RESULTS   *
+ *  FOR DIFFERENT PROTOTYPES                  *
+ **********************************************
+*/
+
+/**
+ * This function processes result for a location prototype.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Object} processed location data.
+ */
+
 function processLocationResult(body, subtestCounts) {
   let count = subtestCounts.locationCount;
   let i, locationResult = {};
@@ -163,29 +326,41 @@ function processLocationResult(body, subtestCounts) {
   let subtestId = body.subtestId;
 
   for (i = 0; i < labels.length; i++) {
-    let key = `${subtestId}.${labels[i]}${locSuffix}`
-    locationResult[key] = location[i];
+    let key = `${subtestId}.${labels[i].toLowerCase()}${locSuffix}`
+    locationResult[key] = location[i].toLowerCase();
   }
   locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.timestamp;
 
   return locationResult;
 }
 
-// Generate datetime prototype result
-function processDatetimeResult(doc, subtestCounts) {
+/**
+ * This function processes result for a datetime prototype.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Object} processed datetime data.
+ */
+
+function processDatetimeResult(body, subtestCounts) {
   let count = subtestCounts.datetimeCount;
   let suffix = count > 0 ? `_${count}` : '';
   datetimeResult = {
-    [`${doc.subtestId}.year${suffix}`]: doc.data.year,
-    [`${doc.subtestId}.month${suffix}`]: doc.data.month,
-    [`${doc.subtestId}.day${suffix}`]: doc.data.day,
-    [`${doc.subtestId}.assess_time${suffix}`]: doc.data.time,
-    [`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`]: doc.timestamp
+    [`${body.subtestId}.year${suffix}`]: body.data.year,
+    [`${body.subtestId}.month${suffix}`]: body.data.month,
+    [`${body.subtestId}.day${suffix}`]: body.data.day,
+    [`${body.subtestId}.assess_time${suffix}`]: body.data.time,
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
   }
   return datetimeResult;
 }
 
-// Generate result for consent prototype
+/**
+ * This function processes a consent prototype subtest data.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Object} processed consent data.
+ */
+
 function processConsentResult(body, subtestCounts) {
   let count = subtestCounts.consentCount;
   let suffix = count > 0 ? `_${count}` : '';
@@ -196,7 +371,13 @@ function processConsentResult(body, subtestCounts) {
   return consentResult;
 }
 
-// Generate result for ID prototype
+/**
+ * This function processes an id prototype subtest data.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Object} processed id data.
+ */
+
 function processIDResult(body, subtestCounts) {
   let count = subtestCounts.idCount;
   let suffix = count > 0 ? `_${count}` : '';
@@ -207,19 +388,40 @@ function processIDResult(body, subtestCounts) {
   return idResult;
 }
 
-// Generate result for survey prototype
+/**
+ * This function processes a survey prototype subtest data.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Object} processed survey data.
+ */
+
 function processSurveyResult(body, subtestCounts) {
   let count = subtestCounts.surveyCount;
   let surveyResult = {};
+
   for (doc in body.data) {
-    surveyResult[`${body.subtestId}.${doc}`] = body.data[doc];
+    if (typeof body.data[doc] === 'object') {
+      for (item in body.data[doc]) {
+        let surveyValue = translateSurveyValue(body.data[doc][item]);
+        surveyResult[`${body.subtestId}.${doc}.${item}`] = surveyValue;
+      }
+    } else {
+      let value = translateSurveyValue(body.data[doc]);
+      surveyResult[`${body.subtestId}.${doc}`] = value;
+    }
   }
   surveyResult[`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
 
   return surveyResult;
 }
 
-// Generate result for grid prototype
+/**
+ * This function processes a grid prototype subtest data.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Object} processed grid data.
+ */
+
 function processGridResult(body, subtestCounts) {
   let count = subtestCounts.gridCount;
   let varName = body.data.variable_name || body.name.toLowerCase().replace(/\s/g, '_');
@@ -235,24 +437,31 @@ function processGridResult(body, subtestCounts) {
   gridResult[`${subtestId}.${varName}_time_allowed${suffix}`] = body.data.time_allowed;
 
   for (doc of body.data.items) {
-    gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = doc.itemResult;
+    let gridValue = translateGridValue(doc.itemResult);
+    gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = gridValue;
   }
   gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
 
   return gridResult;
 }
 
-// Generate result for GPS prototype
+/**
+ * This function processes a gps prototype subtest data.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Object} processed gps data.
+ */
+
 function processGpsResult(doc, subtestCounts) {
   let count = subtestCounts.gpsCount;
   let gpsResult = {};
   let suffix = count > 0 ? `_${count}` : '';
 
-  gpsResult[`${doc.subtestId}.latitude${suffix}`] = doc.data.latitude;
-  gpsResult[`${doc.subtestId}.longitude${suffix}`] = doc.data.longitude;
-  gpsResult[`${doc.subtestId}.accuracy${suffix}`] = doc.data.accuracy;
-  gpsResult[`${doc.subtestId}.altitude${suffix}`] = doc.data.altitude;
-  gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altitudeAccuracy;
+  gpsResult[`${doc.subtestId}.latitude${suffix}`] = doc.data.lat;
+  gpsResult[`${doc.subtestId}.longitude${suffix}`] = doc.data.long;
+  gpsResult[`${doc.subtestId}.altitude${suffix}`] = doc.data.alt;
+  gpsResult[`${doc.subtestId}.accuracy${suffix}`] = doc.data.acc;
+  gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altAcc;
   gpsResult[`${doc.subtestId}.heading${suffix}`] = doc.data.heading;
   gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
   gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.data.timestamp;
@@ -260,7 +469,13 @@ function processGpsResult(doc, subtestCounts) {
   return gpsResult;
 }
 
-// Generate result for Camera prototype
+/**
+ * This function processes a camera prototype subtest data.
+ * @param {Object} body - document to be processed.
+ * @param {Object} subtestCounts - count.
+ * @returns {Object} processed camera data.
+ */
+
 function processCamera(body, subtestCounts) {
   let count = subtestCounts.cameraCount;
   let cameraResult = {};
@@ -274,32 +489,34 @@ function processCamera(body, subtestCounts) {
   return cameraResult;
 }
 
-// Generate CSV file
-function generateCSV(colSettings, resultData) {
-  let workbook = new Excel.Workbook();
-  workbook.creator = 'Brockman';
-  workbook.lastModifiedBy = 'Matthew';
-  workbook.created = new Date(2017, 9, 1);
-  workbook.modified = new Date();
-  workbook.lastPrinted = new Date(2017, 7, 27);
+/**
+ * This function maps a value in a result doc to a
+ * value that will be represented in a csv file.
+ * @param {string} databaseValue - result value to be mapped.
+ * @returns {string} - translated survey value.
+ */
 
-  let excelSheet = workbook.addWorksheet('Result Sheet', {
-    views: [{ xSplit: 1 }], pageSetup: { paperSize: 9, orientation: 'landscape' }
-  });
+function translateSurveyValue(databaseValue) {
+  if (databaseValue == null) {
+    databaseValue = 'no_record';
+  }
+  return surveyValueMap[databaseValue] || String(databaseValue);
+};
 
-  excelSheet.columns = colSettings.column_headers;
+/**
+ * This function maps a value in a result doc to a
+ * value that will be represented in a csv file.
+ * @param {string} databaseValue - result value to be mapped.
+ * @returns {string} - translated grid value.
+ */
 
-  excelSheet.addRow(resultData);
+function translateGridValue(databaseValue) {
+  if (databaseValue == null) {
+    databaseValue = 'no_record';
+  }
+  return gridValueMap[databaseValue] || String(databaseValue);
+};
 
-  let creationTime = new Date().toISOString();
-  let filename = `testcsvfile-${creationTime}.xlsx`;
+exports.generateResult = generateResult;
 
-  // create and fill Workbook;
-  workbook.xlsx.writeFile(filename, 'utf8')
-    .then(() => {
-      console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓'));
-    })
-    .catch((err) => console.error(err));
-
-  return {message: 'CSV Successfully Generated'};
-}
+exports.saveResult = saveResult;
