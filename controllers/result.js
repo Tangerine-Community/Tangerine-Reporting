@@ -11,7 +11,6 @@
 
 const _ = require('lodash');
 const Excel = require('exceljs');
-const chalk = require('chalk');
 const nano = require('nano');
 
 /**
@@ -90,11 +89,10 @@ const surveyValueMap = {
 
 exports.all = (req, res) => {
   BASE_DB = nano(req.body.base_db);
-  // TODO: Remove the limit param.
-  BASE_DB.list({ limit: 100, include_docs: true }, (err, body) => {
-    if (err) res.json(err);
-    res.json(body.rows);
-  });
+
+  getAllResult(BASE_DB)
+    .then((data) => res.json(data))
+    .catch((err) => res.json(Error(err)))
 }
 
 /**
@@ -147,6 +145,58 @@ exports.get = (req, res) => {
     })
     .catch((err) => res.send(Error(err)));
 }
+
+/**
+ * Process results for ALL assessments in a database
+ * and save them in a different database.
+ *
+ * Example:
+ *
+ *    POST /assessment/result/_all
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the generated header will be saved.
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *      }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+exports.generateAll = (req, res) => {
+  let dbUrl = req.body.base_db;
+  BASE_DB = nano(dbUrl);
+  RESULT_DB = nano(req.body.result_db);
+
+  getAllResult(BASE_DB)
+    .then(async (data) => {
+      let saveResponse;
+
+      for(item of data) {
+        let docId = item.assessmentId || item.curriculumId;
+        let ref = item._id;
+        let processedResult = await generateResult(docId, 0, dbUrl);
+        saveResponse = await saveResult(processedResult, ref, RESULT_DB);
+      }
+      res.json(saveResponse);
+    })
+    .catch((err) => res.send(Error(err)))
+}
+
+/************************
+ *  APPLICATION MODULE  *
+ ************************
+*/
 
 /**
  * This function processes the result for an assessment.
@@ -244,14 +294,35 @@ const generateResult = function(docId, count = 0, dbUrl) {
   });
 }
 
-/**********************************************
- *  HELPER FUNCTIONS FOR DATABASE QUERY       *
- **********************************************
+/********************************************
+ *    HELPER FUNCTIONS FOR DATABASE QUERY   *
+ ********************************************
 */
 
 /**
+ * This function retrieves all result collection in the database.
+ *
+ * @returns {Array} – all result documents.
+ */
+
+const getAllResult = function(BASE_DB) {
+  return new Promise((resolve, reject) => {
+    BASE_DB.view('ojai', 'csvRows', {
+      limit: 100,
+      include_docs: true
+    }, (err, body) => {
+      if (err) reject(err);
+      let resultCollection = _.map(body.rows, (data) => data.doc);
+      resolve(resultCollection);
+    });
+  });
+}
+
+/**
  * This function retrieves a document from the database.
+ *
  * @param {string} docId - id of document.
+ *
  * @returns {Object} - retrieved document.
  */
 
@@ -266,9 +337,11 @@ function retrieveDoc(docId) {
 
 /**
  * This function inserts a document in the database.
+ *
  * @param {Array} docs - document to be saved.
  * @param {string} key - key for indexing.
  * @param {Object} resultDB - the result database.
+ *
  * @returns {Object} - saved document.
  */
 
@@ -283,7 +356,9 @@ const saveResult = function(docs, key, resultDB) {
 
 /**
  * This function retrieves a result document.
+ *
  * @param {string} docId - id of document.
+ *
  * @returns {Array} - result documents.
  */
 
@@ -304,16 +379,18 @@ function getResultById(docId) {
 
 }
 
-/***********************************************
+/**********************************************
  *  HELPER FUNCTIONS FOR PROCESSING RESULTS   *
- *  FOR DIFFERENT PROTOTYPES                  *
+ *          FOR DIFFERENT PROTOTYPES          *
  **********************************************
 */
 
 /**
  * This function processes result for a location prototype.
+ *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Object} processed location data.
  */
 
@@ -336,8 +413,10 @@ function processLocationResult(body, subtestCounts) {
 
 /**
  * This function processes result for a datetime prototype.
+ *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Object} processed datetime data.
  */
 
@@ -356,8 +435,10 @@ function processDatetimeResult(body, subtestCounts) {
 
 /**
  * This function processes a consent prototype subtest data.
+ *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Object} processed consent data.
  */
 
@@ -373,8 +454,10 @@ function processConsentResult(body, subtestCounts) {
 
 /**
  * This function processes an id prototype subtest data.
+ *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Object} processed id data.
  */
 
@@ -390,8 +473,10 @@ function processIDResult(body, subtestCounts) {
 
 /**
  * This function processes a survey prototype subtest data.
+ *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Object} processed survey data.
  */
 
@@ -417,8 +502,10 @@ function processSurveyResult(body, subtestCounts) {
 
 /**
  * This function processes a grid prototype subtest data.
+ *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Object} processed grid data.
  */
 
@@ -447,8 +534,10 @@ function processGridResult(body, subtestCounts) {
 
 /**
  * This function processes a gps prototype subtest data.
+ *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Object} processed gps data.
  */
 
@@ -471,8 +560,10 @@ function processGpsResult(doc, subtestCounts) {
 
 /**
  * This function processes a camera prototype subtest data.
+ *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Object} processed camera data.
  */
 
@@ -492,7 +583,9 @@ function processCamera(body, subtestCounts) {
 /**
  * This function maps a value in a result doc to a
  * value that will be represented in a csv file.
+ *
  * @param {string} databaseValue - result value to be mapped.
+ *
  * @returns {string} - translated survey value.
  */
 
@@ -506,7 +599,9 @@ function translateSurveyValue(databaseValue) {
 /**
  * This function maps a value in a result doc to a
  * value that will be represented in a csv file.
+ *
  * @param {string} databaseValue - result value to be mapped.
+ *
  * @returns {string} - translated grid value.
  */
 

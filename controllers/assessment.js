@@ -56,7 +56,7 @@ let RESULT_DB, BASE_DB;
  * @param res - HTTP response object
  */
 
-exports.getAll = (req, res) => {
+exports.all = (req, res) => {
   BASE_DB = nano(req.body.base_db);
   getAllAssessment(BASE_DB)
     .then((data) => res.json(data))
@@ -108,8 +108,8 @@ exports.get = (req, res) => {
 }
 
 /**
- * Generates headers for ALL assessment collection in a database
- * and saves them in a different database.
+ * Generates headers for ALL assessment collections in a database
+ * and save them in a different database.
  *
  * Example:
  *
@@ -278,7 +278,6 @@ const getAllAssessment = function(BASE_DB) {
       resolve(body.rows);
     });
   });
-
 }
 
 /**

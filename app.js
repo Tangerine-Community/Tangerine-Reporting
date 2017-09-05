@@ -37,14 +37,19 @@ const tripController = require('./controllers/trip');
 /**
  * App routes.
  */
-app.post('/assessment', assessmentController.getAll);
+app.post('/assessment', assessmentController.all);
 app.post('/result', resultController.all);
+
 app.post('/assessment/headers/_all', assessmentController.generateAll);
 app.post('/assessment/headers/:id', assessmentController.get);
+
+app.post('/assessment/result/_all', resultController.generateAll);
 app.post('/assessment/result/:id', resultController.get);
+
 app.post('/workflow', workflowController.all);
 app.post('/workflow/headers/:id', workflowController.getHeaders);
 app.post('/workflow/result/:id', tripController.getResults);
+
 app.post('/generate_csv', csvController.generate);
 app.post('/tangerine_changes', changesController.changes);
 
