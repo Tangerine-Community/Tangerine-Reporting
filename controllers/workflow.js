@@ -62,13 +62,10 @@ let BASE_DB, DB_URL, RESULT_DB;
 
 exports.all = (req, res) => {
   BASE_DB = nano(req.body.base_db);
-  BASE_DB.view('ojai', 'byCollection', {
-    key: 'workflow',
-    include_docs: true
-  }, (err, body) => {
-    if (err) res.send(err);
-    res.json(body.rows)
-  });
+
+  getAllWorkflow(BASE_DB)
+    .then((data) => res.json(data))
+    .catch((err) => res.json(Error(err)))
 }
 
 /**
@@ -120,8 +117,60 @@ exports.getHeaders = (req, res) => {
 }
 
 /**
+ * Generates headers for ALL workflows in the database.
+ *
+ * Example:
+ *
+ *    POST /workflow/headers/_all
+ *  where id refers to the id of the workflow document.
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the generated headers will be saved.
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *       }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+
+exports.generateAll = (req, res) => {
+  BASE_DB = nano(req.body.base_db);
+  RESULT_DB = nano(req.body.result_db);
+
+  getAllWorkflow(BASE_DB)
+    .then(async(data) => {
+      let saveResponse;
+      for (item of data) {
+        let workflowId = item.id;
+        let workflowHeaders = await createWorkflowHeaders(workflowId);
+        saveResponse = await saveHeaders(workflowHeaders, workflowId, RESULT_DB);
+      }
+      res.json(saveResponse);
+    })
+    .catch((err) => res.send(Error(err)));
+}
+
+/*****************************
+ *     APPLICATION MODULE    *
+ *****************************
+*/
+
+/**
  * This function creates headers for a workflow.
+ *
  * @param {string} docId - worklfow id of the document.
+ *
  * @returns {Array} - generated headers for csv.
  */
 
@@ -162,9 +211,34 @@ const createWorkflowHeaders = function(docId) {
   });
 }
 
+/********************************************
+ *    HELPER FUNCTIONS FOR DATABASE QUERY   *
+ ********************************************
+*/
+
+/**
+ * This function retrieves all workflow collections in the database.
+ *
+ * @returns {Array} – all workflow documents.
+ */
+
+const getAllWorkflow = function(BASE_DB) {
+  return new Promise((resolve, reject) => {
+    BASE_DB.view('ojai', 'byCollection', {
+      key: 'workflow',
+      include_docs: true
+    }, (err, body) => {
+      if (err) reject(err);
+      resolve(body.rows);
+    });
+  });
+}
+
 /**
  * This function retrieves a document from the database.
+ *
  * @param {string} docId - id of document.
+ *
  * @returns {Object} - retrieved document.
  */
 

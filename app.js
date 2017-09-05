@@ -47,6 +47,8 @@ app.post('/assessment/result/_all', resultController.generateAll);
 app.post('/assessment/result/:id', resultController.get);
 
 app.post('/workflow', workflowController.all);
+app.post('/workflow/headers/_all', workflowController.generateAll);
+
 app.post('/workflow/headers/:id', workflowController.getHeaders);
 app.post('/workflow/result/:id', tripController.getResults);
 
