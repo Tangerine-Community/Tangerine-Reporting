@@ -313,7 +313,6 @@ const generateResult = function(docId, count = 0, dbUrl) {
 const getAllResult = function(BASE_DB) {
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', {
-      limit: 100,
       include_docs: true
     }, (err, body) => {
       if (err) reject(err);
@@ -369,8 +368,7 @@ const saveResult = function(docs, key, resultDB) {
 
 function getResultById(docId) {
   return new Promise((resolve, reject) => {
-    // TODO: Remove the limit param.
-    BASE_DB.view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
+    BASE_DB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
       if (err) reject(err);
       let resultCollection = [];
       _.filter(body.rows, (data) => {

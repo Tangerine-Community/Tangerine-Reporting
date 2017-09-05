@@ -139,7 +139,7 @@ exports.generateAll = (req, res) => {
   RESULT_DB = nano(req.body.result_db);
 
   getAllAssessment(BASE_DB)
-    .then(async (data) => {
+    .then(async(data) => {
       let saveResponse;
 
       for(item of data) {
@@ -324,8 +324,7 @@ function getAssessment(id) {
 
 function getResults() {
   return new Promise((resolve, reject) => {
-    // TODO: Remove the limit param.
-    BASE_DB.view('ojai', 'csvRows', { limit: 100, include_docs: true }, (err, body) => {
+    BASE_DB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
       if (err) reject(err);
       let doc = _.map(body.rows, (data) => {
         return data.doc;

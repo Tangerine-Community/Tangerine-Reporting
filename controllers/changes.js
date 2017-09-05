@@ -10,7 +10,6 @@
 
 const _ = require('lodash');
 const Excel = require('exceljs');
-const chalk = require('chalk');
 const nano = require('nano');
 
 /**

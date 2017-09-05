@@ -189,7 +189,6 @@ const processWorkflowResult = function(docId) {
 const getAllResult = function(BASE_DB) {
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', {
-      limit: 100,
       include_docs: true
     }, (err, body) => {
       if (err) reject(err);

@@ -4,7 +4,8 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "start": "nodemon app.js",
+    "start": "node app.js",
+    "dev": "nodemon app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -38,5 +39,9 @@
     "mocha": "^3.4.2",
     "nodemon": "^1.11.0",
     "supertest": "^2.0.1"
+  },
+  "engines": {
+    "node": "8.4.0",
+    "npm": "5.3.0"
   }
 }

@@ -71,7 +71,9 @@ exports.generate = (req, res) => {
 
 /**
  * This function retrieves a document from the database.
+ *
  * @param {string} docId - id of document.
+ *
  * @returns {Object} - retrieved document.
  */
 
@@ -86,8 +88,10 @@ const getDocument = function(docId) {
 
 /**
  * This function generates a CSV file.
+ *
  * @param {Object} colSettings – column headers
  * @param {Object} resultData – the result data.
+ *
  * @returns {Object} – retrieved document.
  */
 
