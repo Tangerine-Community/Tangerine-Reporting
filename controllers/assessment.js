@@ -11,7 +11,6 @@
 
 const _ = require('lodash');
 const Excel = require('exceljs');
-const chalk = require('chalk');
 const nano = require('nano');
 
 /**
@@ -57,15 +56,11 @@ let RESULT_DB, BASE_DB;
  * @param res - HTTP response object
  */
 
-exports.all = (req, res) => {
+exports.getAll = (req, res) => {
   BASE_DB = nano(req.body.base_db);
-  BASE_DB.view('ojai', 'byCollection', {
-    key: 'assessment',
-    include_docs: true
-  }, (err, body) => {
-    if (err) res.send(err);
-    res.json(body.rows);
-  });
+  getAllAssessment(BASE_DB)
+    .then((data) => res.json(data))
+    .catch((err) => res.send(Error(err)))
 }
 
 /**
@@ -113,8 +108,62 @@ exports.get = (req, res) => {
 }
 
 /**
+ * Generates headers for ALL assessment collection in a database
+ * and saves them in a different database.
+ *
+ * Example:
+ *
+ *    POST /assessment/headers/_all
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the generated header will be saved.
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *      }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+exports.generateAll = (req, res) => {
+  BASE_DB = nano(req.body.base_db);
+  RESULT_DB = nano(req.body.result_db);
+
+  getAllAssessment(BASE_DB)
+    .then(async (data) => {
+      let saveResponse;
+
+      for(item of data) {
+        let assessmentId = item.doc.assessmentId;
+        let generatedHeaders = await createColumnHeaders(assessmentId);
+        saveResponse = await saveHeaders(generatedHeaders, assessmentId, RESULT_DB);
+      }
+      res.json(saveResponse);
+    })
+    .catch((err) => res.send(Error(err)))
+}
+
+/*****************************
+ *     APPLICATION MODULE    *
+ *****************************
+*/
+
+/**
  * This function processes the headers for an assessment.
- * @param {string, number, string} [docTypeId, count, dbUrl] assessmentId, count and database url.
+ *
+ * @param {string} docTypeId - assessmentId.
+ * @param {number} count - count.
+ * @param {string} dbUrl - database url.
+ *
  * @returns {Object} processed headers for csv.
  */
 
@@ -208,16 +257,37 @@ const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
 
 }
 
-/**********************************************
- *  HELPER FUNCTIONS FOR DATABASE QUERY       *
- **********************************************
+/********************************************
+ *    HELPER FUNCTIONS FOR DATABASE QUERY   *
+ ********************************************
 */
 
 /**
+ * This function retrieves all assessment collection in the database.
+ *
+ * @returns {Array} – all assessment documents.
+ */
+
+const getAllAssessment = function(BASE_DB) {
+  return new Promise((resolve, reject) => {
+    BASE_DB.view('ojai', 'byCollection', {
+      key: 'assessment',
+      include_docs: true
+    }, (err, body) => {
+      if (err) reject(err);
+      resolve(body.rows);
+    });
+  });
+
+}
+
+/**
  * This function inserts headers in the database.
+ *
  * @param {Array} docs - document to be saved.
  * @param {string} ref - key for indexing.
  * @param {Object} resultDB - the result database.
+ *
  * @returns {Object} saved document.
  */
 
@@ -232,7 +302,9 @@ const saveHeaders = function(docs, ref, resultDB) {
 
 /**
  * This function retrieves an assessment document.
+ *
  * @param {string} id - id of document.
+ *
  * @returns {Object} - assessment documents.
  */
 
@@ -247,6 +319,7 @@ function getAssessment(id) {
 
 /**
  * This function retrieves all result collection.
+ *
  * @returns {Array} - result documents.
  */
 
@@ -265,7 +338,9 @@ function getResults() {
 
 /**
  * This function retrieves all subtest linked to an assessment.
+ *
  * @param {string} id - id of assessment document.
+ *
  * @returns {Array} - subtest documents.
  */
 
@@ -288,7 +363,9 @@ function getSubtests(id) {
 
 /**
  * This function retrieves all questions linked to a subtest document.
+ *
  * @param {string} subtestId - id of subtest document.
+ *
  * @returns {Array} - question documents.
  */
 
@@ -315,8 +392,10 @@ function getQuestionBySubtestId(subtestId) {
 
 /**
  * This function creates headers for location prototypes.
+ *
  * @param {Object} doc - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Array} - generated location headers.
  */
 
@@ -342,8 +421,10 @@ function createLocation(doc, subtestCounts) {
 
 /**
  * This function creates headers for datetime prototypes.
+ *
  * @param {Object} doc - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Array} - generated datetime headers.
  */
 
@@ -363,8 +444,10 @@ function createDatetime(doc, subtestCounts) {
 
 /**
  * This function creates headers for consent prototypes.
+ *
  * @param {Object} doc - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Array} - generated consent headers.
  */
 
@@ -381,8 +464,10 @@ function createConsent(doc, subtestCounts) {
 
 /**
  * This function creates headers for id prototypes.
+ *
  * @param {Object} doc - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Array} - generated id headers.
  */
 
@@ -399,8 +484,10 @@ function createId(doc, subtestCounts) {
 
 /**
  * This function creates headers for survey prototypes.
+ *
  * @param {Object} id - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Array} - generated survey headers.
  */
 
@@ -439,8 +526,10 @@ async function createSurvey(id, subtestCounts) {
 
 /**
  * This function creates headers for grid prototypes.
+ *
  * @param {Object} doc - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Array} - generated grid headers.
  */
 
@@ -510,8 +599,10 @@ async function createGrid(doc, subtestCounts) {
 
 /**
  * This function creates headers for gps prototypes.
+ *
  * @param {Object} doc - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Array} - generated gps headers.
  */
 
@@ -534,8 +625,10 @@ function createGps(doc, subtestCounts) {
 
 /**
  * This function creates headers for camera prototypes.
+ *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCounts - count.
+ *
  * @returns {Array} - generated camera headers.
  */
 
