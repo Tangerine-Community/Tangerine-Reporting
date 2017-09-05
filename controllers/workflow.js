@@ -122,7 +122,6 @@ exports.getHeaders = (req, res) => {
  * Example:
  *
  *    POST /workflow/headers/_all
- *  where id refers to the id of the workflow document.
  *
  *  The request object must contain the main database url and a
  *  result database url where the generated headers will be saved.
@@ -161,10 +160,12 @@ exports.generateAll = (req, res) => {
     .catch((err) => res.send(Error(err)));
 }
 
+
 /*****************************
  *     APPLICATION MODULE    *
  *****************************
 */
+
 
 /**
  * This function creates headers for a workflow.
@@ -211,10 +212,12 @@ const createWorkflowHeaders = function(docId) {
   });
 }
 
+
 /********************************************
  *    HELPER FUNCTIONS FOR DATABASE QUERY   *
  ********************************************
 */
+
 
 /**
  * This function retrieves all workflow collections in the database.

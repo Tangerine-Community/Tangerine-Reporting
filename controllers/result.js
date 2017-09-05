@@ -173,6 +173,7 @@ exports.get = (req, res) => {
  * @param req - HTTP request object
  * @param res - HTTP response object
  */
+
 exports.generateAll = (req, res) => {
   let dbUrl = req.body.base_db;
   BASE_DB = nano(dbUrl);
@@ -193,10 +194,12 @@ exports.generateAll = (req, res) => {
     .catch((err) => res.send(Error(err)))
 }
 
+
 /************************
  *  APPLICATION MODULE  *
  ************************
 */
+
 
 /**
  * This function processes the result for an assessment.
@@ -294,10 +297,12 @@ const generateResult = function(docId, count = 0, dbUrl) {
   });
 }
 
+
 /********************************************
  *    HELPER FUNCTIONS FOR DATABASE QUERY   *
  ********************************************
 */
+
 
 /**
  * This function retrieves all result collection in the database.
