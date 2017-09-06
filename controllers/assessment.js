@@ -17,7 +17,7 @@ const nano = require('nano');
  * Declare database variables.
  */
 
-let RESULT_DB, BASE_DB;
+let BASE_DB, DB_URL, RESULT_DB;
 
 /**
  * Retrieves all assessment collection in the database.
@@ -93,11 +93,12 @@ exports.all = (req, res) => {
  */
 
 exports.get = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
+  DB_URL = req.body.base_db;
+  BASE_DB = nano(DB_URL);
   RESULT_DB = nano(req.body.result_db);
   let assessmentId = req.params.id;
 
-  createColumnHeaders(assessmentId)
+  createColumnHeaders(assessmentId, 0, DB_URL)
     .then((result) => {
       return saveHeaders(result, assessmentId, RESULT_DB);
     })
@@ -135,7 +136,8 @@ exports.get = (req, res) => {
  * @param res - HTTP response object
  */
 exports.generateAll = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
+  DB_URL = req.body.base_db;
+  BASE_DB = nano(DB_URL);
   RESULT_DB = nano(req.body.result_db);
 
   getAllAssessment(BASE_DB)
@@ -144,7 +146,7 @@ exports.generateAll = (req, res) => {
 
       for(item of data) {
         let assessmentId = item.doc.assessmentId;
-        let generatedHeaders = await createColumnHeaders(assessmentId);
+        let generatedHeaders = await createColumnHeaders(assessmentId, 0, DB_URL);
         saveResponse = await saveHeaders(generatedHeaders, assessmentId, RESULT_DB);
       }
       res.json(saveResponse);
@@ -160,19 +162,19 @@ exports.generateAll = (req, res) => {
 /**
  * This function processes the headers for an assessment.
  *
- * @param {string} docTypeId - assessmentId.
+ * @param {string} docId - assessmentId.
  * @param {number} count - count.
  * @param {string} dbUrl - database url.
  *
  * @returns {Object} processed headers for csv.
  */
 
-const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
+const createColumnHeaders = function(docId, count = 0, dbUrl) {
   let assessments = [];
-  BASE_DB = BASE_DB || nano(dbUrl);
+  BASE_DB = nano(dbUrl);
 
   return new Promise((resolve, reject) => {
-    getAssessment(docTypeId)
+    getAssessment(docId)
       .then((item) => {
         if (item.assessmentId) {
           let assessmentSuffix = count > 0 ? `_${count}` : '';
@@ -182,7 +184,7 @@ const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
           assessments.push({ header: `start_time${assessmentSuffix}`, key: `${item.assessmentId}.start_time${assessmentSuffix}` });
           assessments.push({ header: `order_map${assessmentSuffix}`, key: `${item.assessmentId}.order_map${assessmentSuffix}` });
         }
-        return getSubtests(docTypeId);
+        return getSubtests(docId);
       })
       .then(async(subtestData) => {
         let subtestCounts = {
@@ -248,7 +250,7 @@ const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
           }
         }
         let assessmentSuffix = count > 0 ? `_${count}` : '';
-        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docTypeId}.end_time${assessmentSuffix}` });
+        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docId}.end_time${assessmentSuffix}` });
 
         resolve(assessments);
       })
