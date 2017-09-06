@@ -144,7 +144,8 @@ exports.getHeaders = (req, res) => {
  */
 
 exports.generateAll = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
+  DB_URL = req.body.base_db;
+  BASE_DB = nano(DB_URL);
   RESULT_DB = nano(req.body.result_db);
 
   getAllWorkflow(BASE_DB)
@@ -152,7 +153,7 @@ exports.generateAll = (req, res) => {
       let saveResponse;
       for (item of data) {
         let workflowId = item.id;
-        let workflowHeaders = await createWorkflowHeaders(workflowId);
+        let workflowHeaders = await createWorkflowHeaders(workflowId, DB_URL);
         saveResponse = await saveHeaders(workflowHeaders, workflowId, RESULT_DB);
       }
       res.json(saveResponse);
@@ -171,12 +172,14 @@ exports.generateAll = (req, res) => {
  * This function creates headers for a workflow.
  *
  * @param {string} docId - worklfow id of the document.
+ * @param {string} dbUrl - databse url.
  *
  * @returns {Array} - generated headers for csv.
  */
 
-const createWorkflowHeaders = function(docId) {
+const createWorkflowHeaders = function(docId, DB_URL) {
   let workflowHeaders = [];
+  BASE_DB = nano(DB_URL);
 
   return new Promise ((resolve, reject) => {
     retrieveDoc(docId)
