@@ -17,12 +17,6 @@ const processResult = require('./result').generateResult;
 const saveResult = require('./result').saveResult;
 
 /**
- * Declare database variables.
- */
-
-let BASE_DB, DB_URL, RESULT_DB;
-
-/**
  * Processes result for a workflow.
  *
  * Example:
@@ -51,27 +45,27 @@ let BASE_DB, DB_URL, RESULT_DB;
  */
 
 exports.processResult = (req, res) => {
-  DB_URL = req.body.base_db;
-  BASE_DB = nano(DB_URL);
-  RESULT_DB = nano(req.body.result_db);
+  let dbUrl = req.body.base_db;
+  let resultDbUrl = req.body.result_db;
+  let docId = req.params.id;
   let tripId;
 
-  getWorkflowDoc(req.params.id)
-    .then((doc) => {
-      tripId = doc.tripId;
-      return processWorkflowResult(doc.workflowId);
+  getWorkflowDoc(docId, dbUrl)
+    .then((data) => {
+      tripId = data.tripId;
+      return processWorkflowResult(data.workflowId, dbUrl);
     })
     .then((result) => {
-      return saveResult(result, tripId, RESULT_DB);
+      return saveResult(result, tripId, resultDbUrl);
     })
-    .then((data) => {
-      res.json(data);
+    .then((saved) => {
+      res.json(saved);
     })
     .catch((err) => res.send(Error(err)));
 }
 
 /**
- * Processes results for ALL workflows in the database.
+ * Process results for ALL workflows in the database.
  *
  * Example:
  *
@@ -98,11 +92,10 @@ exports.processResult = (req, res) => {
  */
 
 exports.processAll = (req, res) => {
-  DB_URL = req.body.base_db;
-  BASE_DB = nano(DB_URL);
-  RESULT_DB = nano(req.body.result_db);
+  let dbUrl = req.body.base_db;
+  let resultDbUrl = req.body.result_db;
 
-  getAllResult(BASE_DB)
+  getAllResult(dbUrl)
     .then(async(data) => {
       let saveResponse;
       for (item of data) {
@@ -110,14 +103,14 @@ exports.processAll = (req, res) => {
 
         if (!workflowId) {
           let docId = item.assessmentId || item.curriculumId;
-          let assessmentResults = await processResult(docId, 0, DB_URL);
-          saveResponse = await saveResult(assessmentResults, item._id, RESULT_DB);
+          let assessmentResults = await processResult(docId, 0, dbUrl);
+          saveResponse = await saveResult(assessmentResults, item._id, resultDbUrl);
         } else {
-          let processedResult = await processWorkflowResult(workflowId);
-          saveResponse = await saveResult(processedResult, item.tripId, RESULT_DB);
+          let processedResult = await processWorkflowResult(workflowId, dbUrl);
+          saveResponse = await saveResult(processedResult, item.tripId, resultDbUrl);
         }
       }
-      res.json(saveResponse);
+      res.json(data);
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -137,11 +130,11 @@ exports.processAll = (req, res) => {
  * @returns {Object} - processed result for csv.
  */
 
-const processWorkflowResult = function(docId) {
+const processWorkflowResult = function(docId, dbUrl) {
   let workflowResults = {};
 
   return new Promise ((resolve, reject) => {
-    getWorkflowDoc(docId)
+    getWorkflowDoc(docId, dbUrl)
       .then(async(data) => {
         let workflowCounts = {
           assessmentCount: 0,
@@ -151,12 +144,12 @@ const processWorkflowResult = function(docId) {
 
         for (item of data.children) {
           if (item.type === 'assessment') {
-            let assessmentResults = await processResult(item.typesId, workflowCounts.assessmentCount, DB_URL);
+            let assessmentResults = await processResult(item.typesId, workflowCounts.assessmentCount, dbUrl);
             workflowResults = _.assignIn(workflowResults, assessmentResults);
             workflowCounts.assessmentCount++;
           }
           if (item.type === 'curriculum') {
-            let curriculumResults = await processResult(item.typesId, workflowCounts.curriculumCount, DB_URL);
+            let curriculumResults = await processResult(item.typesId, workflowCounts.curriculumCount, dbUrl);
             workflowResults = _.assignIn(workflowResults, curriculumResults);
             workflowCounts.curriculumCount++;
           }
@@ -183,10 +176,13 @@ const processWorkflowResult = function(docId) {
 /**
  * This function retrieves all result collection in the database.
  *
+ * @param {string} dbUrl - database url.
+ *
  * @returns {Array} – all result documents.
  */
 
-const getAllResult = function(BASE_DB) {
+const getAllResult = function(dbUrl) {
+  let BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', {
       include_docs: true
@@ -202,11 +198,13 @@ const getAllResult = function(BASE_DB) {
  * This function retrieves a document from the database.
  *
  * @param {string} docId - id of document.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Object} - retrieved document.
  */
 
-function getWorkflowDoc(docId) {
+function getWorkflowDoc(docId, dbUrl) {
+  let BASE_DB = nano(dbUrl);
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);

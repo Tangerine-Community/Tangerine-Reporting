@@ -14,12 +14,6 @@ const Excel = require('exceljs');
 const nano = require('nano');
 
 /**
- * Declare database variables
- */
-
-let RESULT_DB, BASE_DB;
-
-/**
  * Define value maps for grid and survey values.
  */
 
@@ -88,9 +82,7 @@ const surveyValueMap = {
  */
 
 exports.all = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
-
-  getAllResult(BASE_DB)
+  getAllResult(req.body.base_db)
     .then((data) => res.json(data))
     .catch((err) => res.json(Error(err)))
 }
@@ -128,17 +120,16 @@ exports.all = (req, res) => {
 
 exports.processResult = (req, res) => {
   let dbUrl = req.body.base_db;
-  BASE_DB = nano(dbUrl);
-  RESULT_DB = nano(req.body.result_db);
-  let parentId = req.params.id;
+  let resultDbUrl = req.body.result_db;
+  let docId = req.params.id;
 
-  retrieveDoc(parentId)
+  retrieveDoc(docId, dbUrl)
     .then((data) => {
-      let docId = data.assessmentId || data.curriculumId;
-      return generateResult(docId, 0, dbUrl);
+      let collectionId = data.assessmentId || data.curriculumId;
+      return generateResult(collectionId, 0, dbUrl);
     })
     .then((result) => {
-      return saveResult(result, parentId, RESULT_DB);
+      return saveResult(result, docId, resultDbUrl);
     })
     .then((saved) => {
       res.json(saved);
@@ -176,18 +167,17 @@ exports.processResult = (req, res) => {
 
 exports.processAll = (req, res) => {
   let dbUrl = req.body.base_db;
-  BASE_DB = nano(dbUrl);
-  RESULT_DB = nano(req.body.result_db);
+  let resultDbUrl = req.body.result_db;
 
-  getAllResult(BASE_DB)
-    .then(async (data) => {
+  getAllResult(dbUrl)
+    .then(async(data) => {
       let saveResponse;
 
       for(item of data) {
         let docId = item.assessmentId || item.curriculumId;
         let ref = item._id;
         let processedResult = await generateResult(docId, 0, dbUrl);
-        saveResponse = await saveResult(processedResult, ref, RESULT_DB);
+        saveResponse = await saveResult(processedResult, ref, resultDbUrl);
       }
       res.json(saveResponse);
     })
@@ -211,10 +201,9 @@ exports.processAll = (req, res) => {
 
 const generateResult = function(docId, count = 0, dbUrl) {
   let result = {};
-  BASE_DB = nano(dbUrl);
 
   return new Promise ((resolve, reject) => {
-    getResultById(docId)
+    getResultById(docId, dbUrl)
       .then((collections) => {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
 
@@ -307,10 +296,13 @@ const generateResult = function(docId, count = 0, dbUrl) {
 /**
  * This function retrieves all result collection in the database.
  *
+ * @param {string} dbUrl - database url.
+ *
  * @returns {Array} – all result documents.
  */
 
-const getAllResult = function(BASE_DB) {
+const getAllResult = function(dbUrl) {
+  let BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', {
       include_docs: true
@@ -326,11 +318,13 @@ const getAllResult = function(BASE_DB) {
  * This function retrieves a document from the database.
  *
  * @param {string} docId - id of document.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Object} - retrieved document.
  */
 
-function retrieveDoc(docId) {
+function retrieveDoc(docId, dbUrl) {
+  let BASE_DB = nano(dbUrl);
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);
@@ -344,14 +338,15 @@ function retrieveDoc(docId) {
  *
  * @param {Array} docs - document to be saved.
  * @param {string} key - key for indexing.
- * @param {Object} resultDB - the result database.
+ * @param {string} dbUrl - url of the result database.
  *
  * @returns {Object} - saved document.
  */
 
-const saveResult = function(docs, key, resultDB) {
+const saveResult = function(docs, key, dbUrl) {
+  let RESULT_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
-    resultDB.insert({ processed_results: docs }, key, (err, body) => {
+    RESULT_DB.insert({ processed_results: docs }, key, (err, body) => {
       if (err) reject(err);
       resolve(body);
     });
@@ -362,11 +357,13 @@ const saveResult = function(docs, key, resultDB) {
  * This function retrieves a result document.
  *
  * @param {string} docId - id of document.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Array} - result documents.
  */
 
-function getResultById(docId) {
+function getResultById(docId, dbUrl) {
+  let BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
       if (err) reject(err);
