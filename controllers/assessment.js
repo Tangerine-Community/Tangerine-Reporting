@@ -85,7 +85,7 @@ exports.all = (req, res) => {
  * @param res - HTTP response object
  */
 
-exports.get = (req, res) => {
+exports.generateHeader = (req, res) => {
   let dbUrl = req.body.base_db;
   let resultDbUrl = req.body.result_db;
   let assessmentId = req.params.id;
@@ -255,15 +255,15 @@ const createColumnHeaders = function(docId, count = 0, dbUrl) {
 */
 
 /**
- * This function retrieves all assessment collection in the database.
- *  
- * @param {string} db_url - database url.
- * 
+ * This function retrieves all assessment collections in the database.
+ *
+ * @param {string} dbUrl - database url.
+ *
  * @returns {Array} – all assessment documents.
  */
 
-const getAllAssessment = function(db_url) {
-  let BASE_DB = nano(db_url);
+const getAllAssessment = function(dbUrl) {
+  let BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'byCollection', {
       key: 'assessment',
@@ -322,9 +322,9 @@ function getAssessment(id, dbUrl) {
 
 /**
  * This function retrieves all result collection.
- * 
+ *
  * @param {string} dbUrl - database url.
- * 
+ *
  * @returns {Array} - result documents.
  */
 

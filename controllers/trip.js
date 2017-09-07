@@ -50,7 +50,7 @@ let BASE_DB, DB_URL, RESULT_DB;
  * @param res - HTTP response object
  */
 
-exports.getResult = (req, res) => {
+exports.processResult = (req, res) => {
   DB_URL = req.body.base_db;
   BASE_DB = nano(DB_URL);
   RESULT_DB = nano(req.body.result_db);
@@ -97,7 +97,7 @@ exports.getResult = (req, res) => {
  * @param res - HTTP response object
  */
 
-exports.generateAll = (req, res) => {
+exports.processAll = (req, res) => {
   DB_URL = req.body.base_db;
   BASE_DB = nano(DB_URL);
   RESULT_DB = nano(req.body.result_db);

@@ -126,7 +126,7 @@ exports.all = (req, res) => {
  * @param res - HTTP response object
  */
 
-exports.get = (req, res) => {
+exports.processResult = (req, res) => {
   let dbUrl = req.body.base_db;
   BASE_DB = nano(dbUrl);
   RESULT_DB = nano(req.body.result_db);
@@ -174,7 +174,7 @@ exports.get = (req, res) => {
  * @param res - HTTP response object
  */
 
-exports.generateAll = (req, res) => {
+exports.processAll = (req, res) => {
   let dbUrl = req.body.base_db;
   BASE_DB = nano(dbUrl);
   RESULT_DB = nano(req.body.result_db);

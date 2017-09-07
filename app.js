@@ -43,19 +43,19 @@ const tripController = require('./controllers/trip');
  */
 
 app.post('/assessment', assessmentController.all);
-app.post('/assessment/headers/_all', assessmentController.generateAll);
-app.post('/assessment/headers/:id', assessmentController.get);
+app.post('/assessment/headers/all', assessmentController.generateAll);
+app.post('/assessment/headers/:id', assessmentController.generateHeader);
 
 app.post('/result', resultController.all);
-app.post('/assessment/result/_all', resultController.generateAll);
-app.post('/assessment/result/:id', resultController.get);
+app.post('/assessment/result/all', resultController.processAll);
+app.post('/assessment/result/:id', resultController.processResult);
 
 app.post('/workflow', workflowController.all);
-app.post('/workflow/headers/_all', workflowController.generateAll);
-app.post('/workflow/headers/:id', workflowController.getHeaders);
+app.post('/workflow/headers/all', workflowController.generateAll);
+app.post('/workflow/headers/:id', workflowController.generateHeader);
 
-app.post('/workflow/result/_all', tripController.generateAll);
-app.post('/workflow/result/:id', tripController.getResult);
+app.post('/workflow/result/all', tripController.processAll);
+app.post('/workflow/result/:id', tripController.processResult);
 
 app.post('/generate_csv', csvController.generate);
 app.post('/tangerine_changes', changesController.changes);
