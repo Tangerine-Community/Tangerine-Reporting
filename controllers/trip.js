@@ -55,11 +55,9 @@ exports.processResult = (req, res) => {
       tripId = data.tripId;
       return processWorkflowResult(data.workflowId, dbUrl);
     })
-    .then((result) => {
-      return saveResult(result, tripId, resultDbUrl);
-    })
-    .then((saved) => {
-      res.json(saved);
+    .then(async(result) => {
+      const saveResponse = await saveResult(result, tripId, resultDbUrl);
+      res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -110,7 +108,7 @@ exports.processAll = (req, res) => {
           saveResponse = await saveResult(processedResult, item.tripId, resultDbUrl);
         }
       }
-      res.json(data);
+      res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
 }

@@ -54,7 +54,7 @@ exports.generate = (req, res) => {
     .then(async(docHeaders) => {
       const result = await getDocument(resultDocId, dbUrl);
       generateCSV(docHeaders, result);
-      res.json(result);
+      res.json({message: 'CSV Successfully Generated'});
     })
     .catch((err) => Error(err));
 }
@@ -112,7 +112,6 @@ const generateCSV = function(colSettings, resultData) {
   workbook.xlsx.writeFile(filename, 'utf8')
     .then(() => {
       console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓'));
-      return { message: 'CSV Successfully Generated' };
     })
     .catch((err) => Error(err));
 

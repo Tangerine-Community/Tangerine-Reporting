@@ -91,11 +91,9 @@ exports.generateHeader = (req, res) => {
   const assessmentId = req.params.id;
 
   createColumnHeaders(assessmentId, 0, dbUrl)
-    .then((result) => {
-      return saveHeaders(result, assessmentId, resultDbUrl);
-    })
-    .then((data) => {
-      res.json(data);
+    .then(async(result) => {
+      const saveResponse = await saveHeaders(result, assessmentId, resultDbUrl);
+      res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
 }

@@ -128,11 +128,9 @@ exports.processResult = (req, res) => {
       let collectionId = data.assessmentId || data.curriculumId;
       return generateResult(collectionId, 0, dbUrl);
     })
-    .then((result) => {
-      return saveResult(result, docId, resultDbUrl);
-    })
-    .then((saved) => {
-      res.json(saved);
+    .then(async(result) => {
+      const saveResponse = await saveResult(result, docId, resultDbUrl);
+      res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
 }
