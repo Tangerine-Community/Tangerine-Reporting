@@ -89,8 +89,8 @@ exports.all = (req, res) => {
  */
 
 exports.generateHeader = (req, res) => {
-  let dbUrl = req.body.base_db;
-  let resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
   let workflowId;
 
   retrieveDoc(req.params.id, dbUrl)
@@ -135,8 +135,8 @@ exports.generateHeader = (req, res) => {
  */
 
 exports.generateAll = (req, res) => {
-  let dbUrl = req.body.base_db;
-  let resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
 
   getAllWorkflow(dbUrl)
     .then(async(data) => {
@@ -220,13 +220,15 @@ const createWorkflowHeaders = function(docId, dbUrl) {
  */
 
 const getAllWorkflow = function(dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'byCollection', {
       key: 'workflow',
       include_docs: true
     }, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       resolve(body.rows);
     });
   });
@@ -242,10 +244,12 @@ const getAllWorkflow = function(dbUrl) {
  */
 
 function retrieveDoc(docId, dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       resolve(body)
     });
   });

@@ -45,9 +45,9 @@ const saveResult = require('./result').saveResult;
  */
 
 exports.processResult = (req, res) => {
-  let dbUrl = req.body.base_db;
-  let resultDbUrl = req.body.result_db;
-  let docId = req.params.id;
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
+  const docId = req.params.id;
   let tripId;
 
   getWorkflowDoc(docId, dbUrl)
@@ -92,8 +92,8 @@ exports.processResult = (req, res) => {
  */
 
 exports.processAll = (req, res) => {
-  let dbUrl = req.body.base_db;
-  let resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
 
   getAllResult(dbUrl)
     .then(async(data) => {
@@ -182,7 +182,7 @@ const processWorkflowResult = function(docId, dbUrl) {
  */
 
 const getAllResult = function(dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', {
       include_docs: true
@@ -204,7 +204,7 @@ const getAllResult = function(dbUrl) {
  */
 
 function getWorkflowDoc(docId, dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
       if (err) reject(err);
