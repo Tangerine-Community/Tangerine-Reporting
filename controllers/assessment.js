@@ -86,9 +86,9 @@ exports.all = (req, res) => {
  */
 
 exports.generateHeader = (req, res) => {
-  let dbUrl = req.body.base_db;
-  let resultDbUrl = req.body.result_db;
-  let assessmentId = req.params.id;
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
+  const assessmentId = req.params.id;
 
   createColumnHeaders(assessmentId, 0, dbUrl)
     .then((result) => {
@@ -128,8 +128,8 @@ exports.generateHeader = (req, res) => {
  * @param res - HTTP response object
  */
 exports.generateAll = (req, res) => {
-  let dbUrl = req.body.base_db;
-  let resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
 
   getAllAssessment(dbUrl)
     .then(async(data) => {
@@ -278,24 +278,31 @@ const getAllAssessment = function(dbUrl) {
 }
 
 /**
- * This function inserts headers in the database.
+ * This function saves/updates generated headers in the database.
  *
- * @param {Array} docs - document to be saved.
- * @param {string} ref - key for indexing.
+ * @param {Array} doc - document to be saved.
+ * @param {string} key - key for indexing.
  * @param {string} dbUrl - the result database.
  *
  * @returns {Object} saved document.
  */
 
-const saveHeaders = function(docs, ref, dbUrl) {
-  let RESULT_DB = nano(dbUrl);
+const saveHeaders = function(doc, key, dbUrl) {
+  const RESULT_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
-    RESULT_DB.insert({ column_headers: docs }, ref, (err, body) => {
-      if (err) {
-        reject(err);
+    RESULT_DB.get(key, (error, existingDoc) => {
+      let docObj = { column_headers: doc };
+      // if doc exists update it using its revision number.
+      if (!error) {
+        docObj._rev = existingDoc._rev;
       }
-      resolve(body);
-    });
+      RESULT_DB.insert(docObj, key, (err, body) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(body);
+      })
+    })
   });
 }
 
@@ -309,7 +316,7 @@ const saveHeaders = function(docs, ref, dbUrl) {
  */
 
 function getAssessment(id, dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.get(id, { include_docs: true }, (err, body) => {
       if (err) {
@@ -329,7 +336,7 @@ function getAssessment(id, dbUrl) {
  */
 
 function getResults(dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
       if (err) {
@@ -351,7 +358,7 @@ function getResults(dbUrl) {
  */
 
 function getSubtests(id, dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'subtestsByAssessmentId', {
       key: id,
@@ -377,7 +384,7 @@ function getSubtests(id, dbUrl) {
  */
 
 function getQuestionBySubtestId(subtestId, dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'questionsByParentId', {
       key: subtestId,
@@ -386,9 +393,7 @@ function getQuestionBySubtestId(subtestId, dbUrl) {
       if (err) {
         reject(err);
       }
-      let doc = _.map(body.rows, (data) => {
-        return data.doc;
-      });
+      let doc = _.map(body.rows, (data) => data.doc);
       resolve(doc);
     });
   });

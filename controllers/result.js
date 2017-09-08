@@ -119,9 +119,9 @@ exports.all = (req, res) => {
  */
 
 exports.processResult = (req, res) => {
-  let dbUrl = req.body.base_db;
-  let resultDbUrl = req.body.result_db;
-  let docId = req.params.id;
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
+  const docId = req.params.id;
 
   retrieveDoc(docId, dbUrl)
     .then((data) => {
@@ -166,8 +166,8 @@ exports.processResult = (req, res) => {
  */
 
 exports.processAll = (req, res) => {
-  let dbUrl = req.body.base_db;
-  let resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
 
   getAllResult(dbUrl)
     .then(async(data) => {
@@ -302,12 +302,14 @@ const generateResult = function(docId, count = 0, dbUrl) {
  */
 
 const getAllResult = function(dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', {
       include_docs: true
     }, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       let resultCollection = _.map(body.rows, (data) => data.doc);
       resolve(resultCollection);
     });
@@ -324,31 +326,42 @@ const getAllResult = function(dbUrl) {
  */
 
 function retrieveDoc(docId, dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       resolve(body)
     });
   });
 }
 
 /**
- * This function inserts a document in the database.
+ * This function saves/updates a document in the database.
  *
- * @param {Array} docs - document to be saved.
+ * @param {Array} doc - document to be saved.
  * @param {string} key - key for indexing.
  * @param {string} dbUrl - url of the result database.
  *
  * @returns {Object} - saved document.
  */
 
-const saveResult = function(docs, key, dbUrl) {
-  let RESULT_DB = nano(dbUrl);
+const saveResult = function(doc, key, dbUrl) {
+  const RESULT_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
-    RESULT_DB.insert({ processed_results: docs }, key, (err, body) => {
-      if (err) reject(err);
-      resolve(body);
+    RESULT_DB.get(key, (error, existingDoc) => {
+      let docObj = { processed_results: doc };
+      // if doc exists update it using its revision number.
+      if (!error) {
+        docObj._rev = existingDoc._rev;
+      }
+      RESULT_DB.insert(docObj, key, (err, body) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(body);
+      })
     });
   });
 }
@@ -363,10 +376,12 @@ const saveResult = function(docs, key, dbUrl) {
  */
 
 function getResultById(docId, dbUrl) {
-  let BASE_DB = nano(dbUrl);
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       let resultCollection = [];
       _.filter(body.rows, (data) => {
         if (data.doc.assessmentId === docId) {
