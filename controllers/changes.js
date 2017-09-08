@@ -19,13 +19,9 @@ const nano = require('nano');
 const generateAssessmentHeaders = require('./assessment').createColumnHeaders;
 const processAssessmentResult = require('./result').generateResult;
 const generateWorkflowHeaders = require('./workflow').createWorkflowHeaders;
-const processWorkflowResult = require('./workflow').processWorkflowResult;
-
-/**
- * Declare database variable.
- */
-
-let BASE_DB;
+const processWorkflowResult = require('./trip').processWorkflowResult;
+const saveHeaders = require('./assessment').saveHeaders;
+const saveResult = require('./result').saveResult;
 
 /**
  * Processes any recently changed document in the database based on its collection type.
@@ -58,29 +54,41 @@ let BASE_DB;
  */
 
 exports.changes = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
+  const BASE_DB = nano(dbUrl);
   const feed = BASE_DB.follow({ since: 'now', include_docs:true });
 
-  feed.on('change', (resp) => {
-    let isWorkflowIdSet = (resp.doc.doc.workflowId) ? true : false;
-    let isResult = (resp.doc.doc.collection === 'result') ? true : false;
-    let isWorkflow = (resp.doc.doc.collection === 'workflow') ? true : false;
-    let isAssessment = (resp.doc.doc.collection === 'assessment') ? true : false;
-    let isCurriculum = (resp.doc.doc.collection === 'curriculum') ? true : false;
-    let isQuestion = (resp.doc.doc.collection === 'question') ? true : false;
-    let isSubtest = (resp.doc.doc.collection === 'subtest') ? true : false;
+  feed.on('change', async(resp) => {
+    const docId = resp.doc.doc._id;
+    const assessmentId = resp.doc.doc.assessmentId;
+    const workflowId = resp.doc.doc.workflowId;
+    const tripId = resp.doc.doc.tripId;
+    const collectionType = resp.doc.doc.collection;
+
+    const isWorkflowIdSet = (workflowId) ? true : false;
+    const isResult = (collectionType === 'result') ? true : false;
+    const isWorkflow = (collectionType === 'workflow') ? true : false;
+    const isAssessment = (collectionType === 'assessment') ? true : false;
+    const isCurriculum = (collectionType === 'curriculum') ? true : false;
+    const isQuestion = (collectionType === 'question') ? true : false;
+    const isSubtest = (collectionType === 'subtest') ? true : false;
 
     if (isWorkflowIdSet && isResult) {
-      processWorkflowResult(resp.doc.doc.workflowId);
+      const workflowResult = await processWorkflowResult(workflowId, dbUrl);
+      saveResult(workflowResult, tripId, resultDbUrl);
     }
-     if (isWorkflowIdSet && isWorkflow) {
-      generateWorkflowHeaders(resp.doc.doc.workflowId);
+    if (isWorkflowIdSet && isWorkflow) {
+      const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
+      saveHeaders(workflowHeaders, workflowId, resultDbUrl);
     }
     if (!isWorkflowIdSet && isResult) {
-      processAssessmentResult(resp.doc.doc.assessmentId);
+      const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
+      saveHeaders(assessmentResult, docId, resultDbUrl);
     }
     if (isAssessment || isCurriculum || isQuestion || isSubtest) {
-      generateAssessmentHeaders(resp.doc.doc.assessmentId);
+      const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
+      saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
     }
     res.json(resp);
   });
