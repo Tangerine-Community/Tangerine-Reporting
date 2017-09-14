@@ -201,16 +201,16 @@ const generateResult = function(docId, count = 0, dbUrl) {
   let result = {};
 
   return new Promise ((resolve, reject) => {
-    getResultById(docId, dbUrl)
+    getInChunks(docId, dbUrl)
       .then((collections) => {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
 
         for (data of collections) {
-          result[`${data.assessmentId}.assessmentId${assessmentSuffix}`] = data.assessmentId;
-          result[`${data.assessmentId}.assessmentName${assessmentSuffix}`] = data.assessmentName;
-          result[`${data.assessmentId}.enumerator${assessmentSuffix}`] = data.enumerator;
-          result[`${data.assessmentId}.start_time${assessmentSuffix}`] = data.start_time;
-          result[`${data.assessmentId}.order_map${assessmentSuffix}`] = data.order_map ? data.order_map.join(',') : '';
+          result[`${data.doc.assessmentId}.assessmentId${assessmentSuffix}`] = data.doc.assessmentId;
+          result[`${data.doc.assessmentId}.assessmentName${assessmentSuffix}`] = data.doc.assessmentName;
+          result[`${data.doc.assessmentId}.enumerator${assessmentSuffix}`] = data.doc.enumerator;
+          result[`${data.doc.assessmentId}.start_time${assessmentSuffix}`] = data.doc.start_time;
+          result[`${data.doc.assessmentId}.order_map${assessmentSuffix}`] = data.doc.order_map ? data.doc.order_map.join(',') : '';
 
           let subtestCounts = {
             locationCount: 0,
@@ -224,7 +224,7 @@ const generateResult = function(docId, count = 0, dbUrl) {
             timestampCount: 0
           };
 
-          for (doc of data.subtestData) {
+          for (doc of data.doc.subtestData) {
             if (doc.prototype === 'location') {
               let location = processLocationResult(doc, subtestCounts);
               result = _.assignIn(result, location);
@@ -274,7 +274,7 @@ const generateResult = function(docId, count = 0, dbUrl) {
               subtestCounts.timestampCount++;
             }
             if (doc.prototype === 'complete') {
-              result[`${data.assessmentId}.end_time${assessmentSuffix}`] = doc.data.end_time;
+              result[`${data.doc.assessmentId}.end_time${assessmentSuffix}`] = doc.data.end_time;
             }
           }
         }
@@ -369,27 +369,59 @@ const saveResult = function(doc, key, dbUrl) {
  *
  * @param {string} docId - id of document.
  * @param {string} dbUrl - database url.
+ * @param {number} queryLimit - number of documents to be retrieved.
+ * @param {number} skip - number of documents to be skipped.
+ *
+ * @returns {Object} - result documents.
+ */
+
+function getResultById(docId, dbUrl, queryLimit = 0, skip = 0) {
+  const BASE_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    BASE_DB.view('ojai', 'csvRows', {
+      limit: queryLimit,
+      skip: skip,
+      include_docs: true
+    }, (err, body) => {
+      if (err) {
+        reject(err);
+      }
+      let resultCollection = _.filter(body.rows, (data) => data.doc.assessmentId === docId);
+      resolve({ offset: body.offset, totalRows: body.total_rows, resultCollection });
+    });
+  })
+}
+
+/**
+ * This function retrieves result document in batches
+ *
+ * @param {string} docId - id of document.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Array} - result documents.
  */
 
-function getResultById(docId, dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      let resultCollection = [];
-      _.filter(body.rows, (data) => {
-        if (data.doc.assessmentId === docId) {
-          resultCollection.push(data.doc);
-        }
-      });
-      resolve(resultCollection);
-    });
-  })
+async function getInChunks(docId, dbUrl) {
+  let queryLimit = 1000;
+  let firstResult = await getResultById(docId, dbUrl, queryLimit);
+  let lastPage = Math.floor(firstResult.totalRows / queryLimit) + (firstResult.totalRows % queryLimit);
 
+  if (firstResult.resultCollection.length === 0) {
+    let count = 0;
+    let view = (firstResult.offset / queryLimit) + 1;
+    let skip = queryLimit * view;
+
+    for (count; count <= lastPage; count++) {
+      skip = queryLimit + skip;
+      let nextResult = await getResultById(docId, dbUrl, queryLimit, skip);
+      if (nextResult.resultCollection.length  > 0) {
+        return nextResult.resultCollection;
+        break;
+      }
+    }
+  } else {
+    return firstResult.resultCollection;
+  }
 }
 
 /**********************************************
