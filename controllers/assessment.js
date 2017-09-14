@@ -14,6 +14,12 @@ const Excel = require('exceljs');
 const nano = require('nano');
 
 /**
+ * Local dependency.
+ */
+
+const getResultInChunks = require('./result').getResultInChunks;
+
+/**
  * Retrieves all assessment collection in the database.
  *
  * Example:
@@ -326,27 +332,6 @@ function getAssessment(id, dbUrl) {
 }
 
 /**
- * This function retrieves all result collection.
- *
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} - result documents.
- */
-
-function getResults(dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      let doc = _.map(body.rows, (data) => data.doc);
-      resolve(doc);
-    });
-  });
-}
-
-/**
  * This function retrieves all subtest linked to an assessment.
  *
  * @param {string} id - id of assessment document.
@@ -552,13 +537,11 @@ async function createGrid(doc, subtestCounts, dbUrl) {
   let gridHeader = [];
   let gridData = [];
   let suffix = count > 0 ? `_${count}` : '';
-  let resultDocs = await getResults(dbUrl);
   let docId = doc.assessmentId || doc.curriculumId;
+  let resultDocs = await getResultInChunks(docId, dbUrl);
 
-  let filteredResult = _.filter(resultDocs, (result) => result.assessmentId === docId);
-
-  _.each(filteredResult, (item) => {
-    _.filter(item.subtestData, (value) => {
+  _.each(resultDocs, (item) => {
+    _.filter(item.doc.subtestData, (value) => {
       if(value.prototype === 'grid') {
         gridData.push(value);
       }
