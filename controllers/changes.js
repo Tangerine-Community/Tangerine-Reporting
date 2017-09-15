@@ -13,7 +13,7 @@ const Excel = require('exceljs');
 const nano = require('nano');
 
 /**
- * Local modules.
+ * Local Depencies.
  */
 
 const generateAssessmentHeaders = require('./assessment').createColumnHeaders;
@@ -57,14 +57,14 @@ exports.changes = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
   const BASE_DB = nano(dbUrl);
-  const feed = BASE_DB.follow({ since: 'now', include_docs:true });
+  const feed = BASE_DB.follow({ since: 96009, include_docs: true });
 
   feed.on('change', async(resp) => {
-    const docId = resp.doc.doc._id;
-    const assessmentId = resp.doc.doc.assessmentId;
-    const workflowId = resp.doc.doc.workflowId;
-    const tripId = resp.doc.doc.tripId;
-    const collectionType = resp.doc.doc.collection;
+    const docId = resp.doc._id;
+    const assessmentId = resp.doc.assessmentId;
+    const workflowId = resp.doc.workflowId;
+    const tripId = resp.doc.tripId;
+    const collectionType = resp.doc.collection;
 
     const isWorkflowIdSet = (workflowId) ? true : false;
     const isResult = (collectionType === 'result') ? true : false;
@@ -75,22 +75,31 @@ exports.changes = (req, res) => {
     const isSubtest = (collectionType === 'subtest') ? true : false;
 
     if (isWorkflowIdSet && isResult) {
+      feed.pause();
       const workflowResult = await processWorkflowResult(workflowId, dbUrl);
-      saveResult(workflowResult, tripId, resultDbUrl);
+      await saveResult(workflowResult, tripId, resultDbUrl);
+      setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
     }
-    if (isWorkflowIdSet && isWorkflow) {
-      const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
-      saveHeaders(workflowHeaders, workflowId, resultDbUrl);
-    }
-    if (!isWorkflowIdSet && isResult) {
-      const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
-      saveHeaders(assessmentResult, docId, resultDbUrl);
-    }
-    if (isAssessment || isCurriculum || isQuestion || isSubtest) {
-      const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
-      saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
-    }
-    res.json(resp);
+    // TODO: Uncomment the code below
+    // if (isWorkflowIdSet && isWorkflow) {
+    //   feed.pause();
+    //   const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
+    //   saveHeaders(workflowHeaders, workflowId, resultDbUrl);
+    //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
+    // }
+    // if (!isWorkflowIdSet && isResult) {
+    //   feed.pasue();
+    //   const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
+    //   await saveHeaders(assessmentResult, docId, resultDbUrl);
+    //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
+    // }
+    // if (isAssessment || isCurriculum || isQuestion || isSubtest) {
+    //   feed.pasue();
+    //   const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
+    //   await saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
+    //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
+    // }
+
   });
 
   feed.on('error', (err) => res.send(Error(err)));
