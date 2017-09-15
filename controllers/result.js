@@ -2,7 +2,7 @@
  * This file processes the result of an assessment.
  * The processed result will serve as the values for CSV generation.
  *
- * Modules: generateResult, saveResult, getResultInChunksq.
+ * Modules: generateResult, saveResult, getResultInChunks.
  */
 
 /**
@@ -201,7 +201,7 @@ const generateResult = function(docId, count = 0, dbUrl) {
   let result = {};
 
   return new Promise ((resolve, reject) => {
-    getResultInChunksq(docId, dbUrl)
+    getResultInChunks(docId, dbUrl)
       .then((collections) => {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
 
@@ -401,7 +401,7 @@ function getResultById(docId, dbUrl, queryLimit = 0, skip = 0) {
  * @returns {Array} - result documents.
  */
 
-async function getResultInChunksq(docId, dbUrl) {
+async function getResultInChunks(docId, dbUrl) {
   let queryLimit = 1000;
   let firstResult = await getResultById(docId, dbUrl, queryLimit);
   let lastPage = Math.floor(firstResult.totalRows / queryLimit) + (firstResult.totalRows % queryLimit);
@@ -661,4 +661,4 @@ exports.generateResult = generateResult;
 
 exports.saveResult = saveResult;
 
-exports.getResultInChunksq = getResultInChunksq;
+exports.getResultInChunks = getResultInChunks;
