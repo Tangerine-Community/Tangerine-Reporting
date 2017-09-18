@@ -14,12 +14,6 @@ const Excel = require('exceljs');
 const nano = require('nano');
 
 /**
- * Declare database variables.
- */
-
-let BASE_DB, RESULT_DB;
-
-/**
  * Local modules.
  */
 
@@ -51,20 +45,16 @@ const processResult = require('./result').generateResult;
  */
 
 exports.generate = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
-  RESULT_DB = nano(req.body.result_db);
-  let headerDocId = req.body.headerId;
-  let resultDocId = req.body.resultId;
-  let docHeaders;
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
+  const headerDocId = req.body.headerId;
+  const resultDocId = req.body.resultId;
 
-  getDocument(headerDocId)
-    .then((data) => {
-      docHeaders = data;
-      return getDocument(resultDocId);
-    })
-    .then((result) => {
-      let genCSV = generateCSV(docHeaders, result);
-      res.json(result);
+  getDocument(headerDocId, dbUrl)
+    .then(async(docHeaders) => {
+      const result = await getDocument(resultDocId, dbUrl);
+      generateCSV(docHeaders, result);
+      res.json({message: 'CSV Successfully Generated'});
     })
     .catch((err) => Error(err));
 }
@@ -73,21 +63,25 @@ exports.generate = (req, res) => {
  * This function retrieves a document from the database.
  *
  * @param {string} docId - id of document.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Object} - retrieved document.
  */
 
-const getDocument = function(docId) {
+const getDocument = function(docId, dbUrl) {
+  const RESULT_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     RESULT_DB.get(docId, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       resolve(body);
     });
   });
 }
 
 /**
- * This function generates a CSV file.
+ * This function creates a CSV file.
  *
  * @param {Object} colSettings – column headers
  * @param {Object} resultData – the result data.
@@ -118,7 +112,6 @@ const generateCSV = function(colSettings, resultData) {
   workbook.xlsx.writeFile(filename, 'utf8')
     .then(() => {
       console.log(`%s You have successfully created a new excel file at ${new Date()}`, chalk.green('✓'));
-      return { message: 'CSV Successfully Generated' };
     })
     .catch((err) => Error(err));
 

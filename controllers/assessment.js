@@ -14,10 +14,10 @@ const Excel = require('exceljs');
 const nano = require('nano');
 
 /**
- * Declare database variables.
+ * Local dependency.
  */
 
-let RESULT_DB, BASE_DB;
+const getResultInChunks = require('./result').getResultInChunks;
 
 /**
  * Retrieves all assessment collection in the database.
@@ -57,8 +57,7 @@ let RESULT_DB, BASE_DB;
  */
 
 exports.all = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
-  getAllAssessment(BASE_DB)
+  getAllAssessment(req.body.base_db)
     .then((data) => res.json(data))
     .catch((err) => res.send(Error(err)))
 }
@@ -92,17 +91,15 @@ exports.all = (req, res) => {
  * @param res - HTTP response object
  */
 
-exports.get = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
-  RESULT_DB = nano(req.body.result_db);
-  let assessmentId = req.params.id;
+exports.generateHeader = (req, res) => {
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
+  const assessmentId = req.params.id;
 
-  createColumnHeaders(assessmentId)
-    .then((result) => {
-      return saveHeaders(result, assessmentId, RESULT_DB);
-    })
-    .then((data) => {
-      res.json(data);
+  createColumnHeaders(assessmentId, 0, dbUrl)
+    .then(async(result) => {
+      const saveResponse = await saveHeaders(result, assessmentId, resultDbUrl);
+      res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -135,17 +132,17 @@ exports.get = (req, res) => {
  * @param res - HTTP response object
  */
 exports.generateAll = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
-  RESULT_DB = nano(req.body.result_db);
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
 
-  getAllAssessment(BASE_DB)
+  getAllAssessment(dbUrl)
     .then(async(data) => {
       let saveResponse;
 
       for(item of data) {
         let assessmentId = item.doc.assessmentId;
-        let generatedHeaders = await createColumnHeaders(assessmentId);
-        saveResponse = await saveHeaders(generatedHeaders, assessmentId, RESULT_DB);
+        let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbUrl);
+        saveResponse = await saveHeaders(generatedHeaders, assessmentId, resultDbUrl);
       }
       res.json(saveResponse);
     })
@@ -160,19 +157,18 @@ exports.generateAll = (req, res) => {
 /**
  * This function processes the headers for an assessment.
  *
- * @param {string} docTypeId - assessmentId.
+ * @param {string} docId - assessmentId.
  * @param {number} count - count.
  * @param {string} dbUrl - database url.
  *
  * @returns {Object} processed headers for csv.
  */
 
-const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
+const createColumnHeaders = function(docId, count = 0, dbUrl) {
   let assessments = [];
-  BASE_DB = BASE_DB || nano(dbUrl);
 
   return new Promise((resolve, reject) => {
-    getAssessment(docTypeId)
+    getAssessment(docId, dbUrl)
       .then((item) => {
         if (item.assessmentId) {
           let assessmentSuffix = count > 0 ? `_${count}` : '';
@@ -182,7 +178,7 @@ const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
           assessments.push({ header: `start_time${assessmentSuffix}`, key: `${item.assessmentId}.start_time${assessmentSuffix}` });
           assessments.push({ header: `order_map${assessmentSuffix}`, key: `${item.assessmentId}.order_map${assessmentSuffix}` });
         }
-        return getSubtests(docTypeId);
+        return getSubtests(docId, dbUrl);
       })
       .then(async(subtestData) => {
         let subtestCounts = {
@@ -223,13 +219,13 @@ const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
             subtestCounts.timestampCount++;
           }
           if (data.prototype === 'survey') {
-            let surveys = await createSurvey(data._id, subtestCounts);
+            let surveys = await createSurvey(data._id, subtestCounts, dbUrl);
             assessments = assessments.concat(surveys);
             subtestCounts.surveyCount++;
             subtestCounts.timestampCount++;
           }
           if (data.prototype === 'grid') {
-            let grid = await createGrid(data, subtestCounts);
+            let grid = await createGrid(data, subtestCounts, dbUrl);
             assessments = assessments.concat(grid.gridHeader);
             subtestCounts.gridCount++;
             subtestCounts.timestampCount = grid.timestampCount;
@@ -248,7 +244,7 @@ const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
           }
         }
         let assessmentSuffix = count > 0 ? `_${count}` : '';
-        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docTypeId}.end_time${assessmentSuffix}` });
+        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docId}.end_time${assessmentSuffix}` });
 
         resolve(assessments);
       })
@@ -263,39 +259,54 @@ const createColumnHeaders = function(docTypeId, count = 0, dbUrl) {
 */
 
 /**
- * This function retrieves all assessment collection in the database.
+ * This function retrieves all assessment collections in the database.
+ *
+ * @param {string} dbUrl - database url.
  *
  * @returns {Array} – all assessment documents.
  */
 
-const getAllAssessment = function(BASE_DB) {
+const getAllAssessment = function(dbUrl) {
+  let BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'byCollection', {
       key: 'assessment',
       include_docs: true
     }, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       resolve(body.rows);
     });
   });
 }
 
 /**
- * This function inserts headers in the database.
+ * This function saves/updates generated headers in the database.
  *
- * @param {Array} docs - document to be saved.
- * @param {string} ref - key for indexing.
- * @param {Object} resultDB - the result database.
+ * @param {Array} doc - document to be saved.
+ * @param {string} key - key for indexing.
+ * @param {string} dbUrl - the result database.
  *
  * @returns {Object} saved document.
  */
 
-const saveHeaders = function(docs, ref, resultDB) {
+const saveHeaders = function(doc, key, dbUrl) {
+  const RESULT_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
-    resultDB.insert({ column_headers: docs }, ref, (err, body) => {
-      if (err) reject(err);
-      resolve(body);
-    });
+    RESULT_DB.get(key, (error, existingDoc) => {
+      let docObj = { column_headers: doc };
+      // if doc exists update it using its revision number.
+      if (!error) {
+        docObj._rev = existingDoc._rev;
+      }
+      RESULT_DB.insert(docObj, key, (err, body) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(body);
+      })
+    })
   });
 }
 
@@ -303,33 +314,19 @@ const saveHeaders = function(docs, ref, resultDB) {
  * This function retrieves an assessment document.
  *
  * @param {string} id - id of document.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Object} - assessment documents.
  */
 
-function getAssessment(id) {
+function getAssessment(id, dbUrl) {
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.get(id, { include_docs: true }, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       resolve(body);
-    });
-  });
-}
-
-/**
- * This function retrieves all result collection.
- *
- * @returns {Array} - result documents.
- */
-
-function getResults() {
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', { include_docs: true }, (err, body) => {
-      if (err) reject(err);
-      let doc = _.map(body.rows, (data) => {
-        return data.doc;
-      });
-      resolve(doc);
     });
   });
 }
@@ -338,21 +335,22 @@ function getResults() {
  * This function retrieves all subtest linked to an assessment.
  *
  * @param {string} id - id of assessment document.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Array} - subtest documents.
  */
 
-function getSubtests(id) {
+function getSubtests(id, dbUrl) {
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'subtestsByAssessmentId', {
       key: id,
       include_docs: true
     }, (err, body) => {
-      if (err) reject(err);
-      let subtestDoc = [];
-      _.each(body.rows, (data) => {
-        subtestDoc.push(data.doc);
-      });
+      if (err) {
+        reject(err);
+      }
+      let subtestDoc = _.map(body.rows, (data) => data.doc);
       let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
       resolve(orderedSubtests);
     })
@@ -363,20 +361,22 @@ function getSubtests(id) {
  * This function retrieves all questions linked to a subtest document.
  *
  * @param {string} subtestId - id of subtest document.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Array} - question documents.
  */
 
-function getQuestionBySubtestId(subtestId) {
+function getQuestionBySubtestId(subtestId, dbUrl) {
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'questionsByParentId', {
       key: subtestId,
       include_docs: true
     }, (err, body) => {
-      if (err) reject(err);
-      let doc = _.map(body.rows, (data) => {
-        return data.doc;
-      });
+      if (err) {
+        reject(err);
+      }
+      let doc = _.map(body.rows, (data) => data.doc);
       resolve(doc);
     });
   });
@@ -485,15 +485,16 @@ function createId(doc, subtestCounts) {
  *
  * @param {Object} id - document to be processed.
  * @param {Object} subtestCounts - count.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Array} - generated survey headers.
  */
 
-async function createSurvey(id, subtestCounts) {
+async function createSurvey(id, subtestCounts, dbUrl) {
   let count = subtestCounts.surveyCount;
   let surveyHeader = [];
   let suffix = count > 0 ? `_${count}` : '';
-  let questions = await getQuestionBySubtestId(id);
+  let questions = await getQuestionBySubtestId(id, dbUrl);
   let sortedDoc = _.sortBy(questions, [id, 'order']);
 
   for (doc of sortedDoc) {
@@ -531,18 +532,16 @@ async function createSurvey(id, subtestCounts) {
  * @returns {Array} - generated grid headers.
  */
 
-async function createGrid(doc, subtestCounts) {
+async function createGrid(doc, subtestCounts, dbUrl) {
   let count = subtestCounts.gridCount;
   let gridHeader = [];
   let gridData = [];
   let suffix = count > 0 ? `_${count}` : '';
-  let resultDocs = await getResults();
   let docId = doc.assessmentId || doc.curriculumId;
+  let resultDocs = await getResultInChunks(docId, dbUrl);
 
-  let filteredResult = _.filter(resultDocs, (result) => result.assessmentId === docId);
-
-  _.each(filteredResult, (item) => {
-    _.filter(item.subtestData, (value) => {
+  _.each(resultDocs, (item) => {
+    _.filter(item.doc.subtestData, (value) => {
       if(value.prototype === 'grid') {
         gridData.push(value);
       }

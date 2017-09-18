@@ -13,19 +13,15 @@ const Excel = require('exceljs');
 const nano = require('nano');
 
 /**
- * Local modules.
+ * Local Depencies.
  */
 
 const generateAssessmentHeaders = require('./assessment').createColumnHeaders;
 const processAssessmentResult = require('./result').generateResult;
 const generateWorkflowHeaders = require('./workflow').createWorkflowHeaders;
-const processWorkflowResult = require('./workflow').processWorkflowResult;
-
-/**
- * Declare database variable.
- */
-
-let BASE_DB;
+const processWorkflowResult = require('./trip').processWorkflowResult;
+const saveHeaders = require('./assessment').saveHeaders;
+const saveResult = require('./result').saveResult;
 
 /**
  * Processes any recently changed document in the database based on its collection type.
@@ -58,31 +54,52 @@ let BASE_DB;
  */
 
 exports.changes = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
-  const feed = BASE_DB.follow({ since: 'now', include_docs:true });
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
+  const BASE_DB = nano(dbUrl);
+  const feed = BASE_DB.follow({ since: 96009, include_docs: true });
 
-  feed.on('change', (resp) => {
-    let isWorkflowIdSet = (resp.doc.doc.workflowId) ? true : false;
-    let isResult = (resp.doc.doc.collection === 'result') ? true : false;
-    let isWorkflow = (resp.doc.doc.collection === 'workflow') ? true : false;
-    let isAssessment = (resp.doc.doc.collection === 'assessment') ? true : false;
-    let isCurriculum = (resp.doc.doc.collection === 'curriculum') ? true : false;
-    let isQuestion = (resp.doc.doc.collection === 'question') ? true : false;
-    let isSubtest = (resp.doc.doc.collection === 'subtest') ? true : false;
+  feed.on('change', async(resp) => {
+    const docId = resp.doc._id;
+    const assessmentId = resp.doc.assessmentId;
+    const workflowId = resp.doc.workflowId;
+    const tripId = resp.doc.tripId;
+    const collectionType = resp.doc.collection;
+
+    const isWorkflowIdSet = (workflowId) ? true : false;
+    const isResult = (collectionType === 'result') ? true : false;
+    const isWorkflow = (collectionType === 'workflow') ? true : false;
+    const isAssessment = (collectionType === 'assessment') ? true : false;
+    const isCurriculum = (collectionType === 'curriculum') ? true : false;
+    const isQuestion = (collectionType === 'question') ? true : false;
+    const isSubtest = (collectionType === 'subtest') ? true : false;
 
     if (isWorkflowIdSet && isResult) {
-      processWorkflowResult(resp.doc.doc.workflowId);
+      feed.pause();
+      const workflowResult = await processWorkflowResult(workflowId, dbUrl);
+      await saveResult(workflowResult, tripId, resultDbUrl);
+      setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
     }
-     if (isWorkflowIdSet && isWorkflow) {
-      generateWorkflowHeaders(resp.doc.doc.workflowId);
-    }
-    if (!isWorkflowIdSet && isResult) {
-      processAssessmentResult(resp.doc.doc.assessmentId);
-    }
-    if (isAssessment || isCurriculum || isQuestion || isSubtest) {
-      generateAssessmentHeaders(resp.doc.doc.assessmentId);
-    }
-    res.json(resp);
+    // TODO: Uncomment the code below
+    // if (isWorkflowIdSet && isWorkflow) {
+    //   feed.pause();
+    //   const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
+    //   saveHeaders(workflowHeaders, workflowId, resultDbUrl);
+    //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
+    // }
+    // if (!isWorkflowIdSet && isResult) {
+    //   feed.pasue();
+    //   const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
+    //   await saveHeaders(assessmentResult, docId, resultDbUrl);
+    //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
+    // }
+    // if (isAssessment || isCurriculum || isQuestion || isSubtest) {
+    //   feed.pasue();
+    //   const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
+    //   await saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
+    //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
+    // }
+
   });
 
   feed.on('error', (err) => res.send(Error(err)));

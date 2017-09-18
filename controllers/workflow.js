@@ -11,20 +11,14 @@ const _ = require('lodash');
 const nano = require('nano');
 
 /**
- * Local module
+ * Local modules
  */
 
-const generateHeaders = require('./assessment').createColumnHeaders;
+const createColumnHeaders = require('./assessment').createColumnHeaders;
 const saveHeaders = require('./assessment').saveHeaders;
 
 /**
- * Declare database variables
- */
-
-let BASE_DB, DB_URL, RESULT_DB;
-
-/**
- * Retrieves all workflow collection in the database.
+ * Retrieves all workflow collections in the database.
  *
  * Example:
  *
@@ -61,9 +55,7 @@ let BASE_DB, DB_URL, RESULT_DB;
  */
 
 exports.all = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
-
-  getAllWorkflow(BASE_DB)
+  getAllWorkflow(req.body.base_db)
     .then((data) => res.json(data))
     .catch((err) => res.json(Error(err)))
 }
@@ -96,22 +88,19 @@ exports.all = (req, res) => {
  * @param res - HTTP response object
  */
 
-exports.getHeaders = (req, res) => {
-  DB_URL = req.body.base_db;
-  BASE_DB = nano(DB_URL);
-  RESULT_DB = nano(req.body.result_db);
+exports.generateHeader = (req, res) => {
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
   let workflowId;
 
-  retrieveDoc(req.params.id)
+  retrieveDoc(req.params.id, dbUrl)
     .then((doc) => {
       workflowId = doc.workflowId;
-      return createWorkflowHeaders(workflowId);
+      return createWorkflowHeaders(workflowId, dbUrl);
     })
-    .then((colHeaders) => {
-      return saveHeaders(colHeaders, workflowId, RESULT_DB);
-    })
-    .then((data) => {
-      res.json(data);
+    .then(async(colHeaders) => {
+      const saveResponse = await saveHeaders(colHeaders, workflowId, resultDbUrl);
+      res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -144,16 +133,16 @@ exports.getHeaders = (req, res) => {
  */
 
 exports.generateAll = (req, res) => {
-  BASE_DB = nano(req.body.base_db);
-  RESULT_DB = nano(req.body.result_db);
+  const dbUrl = req.body.base_db;
+  const resultDbUrl = req.body.result_db;
 
-  getAllWorkflow(BASE_DB)
+  getAllWorkflow(dbUrl)
     .then(async(data) => {
       let saveResponse;
       for (item of data) {
         let workflowId = item.id;
-        let workflowHeaders = await createWorkflowHeaders(workflowId);
-        saveResponse = await saveHeaders(workflowHeaders, workflowId, RESULT_DB);
+        let generatedWorkflowHeaders = await createWorkflowHeaders(workflowId, dbUrl);
+        saveResponse = await saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
       }
       res.json(saveResponse);
     })
@@ -171,15 +160,16 @@ exports.generateAll = (req, res) => {
  * This function creates headers for a workflow.
  *
  * @param {string} docId - worklfow id of the document.
+ * @param {string} dbUrl - databse url.
  *
  * @returns {Array} - generated headers for csv.
  */
 
-const createWorkflowHeaders = function(docId) {
+const createWorkflowHeaders = function(docId, dbUrl) {
   let workflowHeaders = [];
 
   return new Promise ((resolve, reject) => {
-    retrieveDoc(docId)
+    retrieveDoc(docId, dbUrl)
       .then(async(data) => {
         let workflowCounts = {
           assessmentCount: 0,
@@ -189,12 +179,12 @@ const createWorkflowHeaders = function(docId) {
 
         for (item of data.children) {
           if (item.type === 'assessment') {
-            let assessmentHeaders = await generateHeaders(item.typesId, workflowCounts.assessmentCount, DB_URL);
+            let assessmentHeaders = await createColumnHeaders(item.typesId, workflowCounts.assessmentCount, dbUrl);
             workflowHeaders.push(assessmentHeaders);
             workflowCounts.assessmentCount++;
           }
           if (item.type === 'curriculum') {
-            let curriculumHeaders = await generateHeaders(item.typesId, workflowCounts.curriculumCount, DB_URL);
+            let curriculumHeaders = await createColumnHeaders(item.typesId, workflowCounts.curriculumCount, dbUrl);
             workflowHeaders.push(curriculumHeaders);
             workflowCounts.curriculumCount++;
           }
@@ -222,16 +212,21 @@ const createWorkflowHeaders = function(docId) {
 /**
  * This function retrieves all workflow collections in the database.
  *
+ * @param {string} dbUrl - database url.
+ *
  * @returns {Array} – all workflow documents.
  */
 
-const getAllWorkflow = function(BASE_DB) {
+const getAllWorkflow = function(dbUrl) {
+  const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('ojai', 'byCollection', {
       key: 'workflow',
       include_docs: true
     }, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       resolve(body.rows);
     });
   });
@@ -241,14 +236,18 @@ const getAllWorkflow = function(BASE_DB) {
  * This function retrieves a document from the database.
  *
  * @param {string} docId - id of document.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Object} - retrieved document.
  */
 
-function retrieveDoc(docId) {
+function retrieveDoc(docId, dbUrl) {
+  const BASE_DB = nano(dbUrl);
   return new Promise ((resolve, reject) => {
     BASE_DB.get(docId, (err, body) => {
-      if (err) reject(err);
+      if (err) {
+        reject(err);
+      }
       resolve(body)
     });
   });
