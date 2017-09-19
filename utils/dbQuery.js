@@ -66,7 +66,7 @@ exports.getAllWorkflow = (dbUrl) => {
 exports.getAllResult = (dbUrl) => {
   const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', { limit: 3,
+    BASE_DB.view('ojai', 'csvRows', {
       include_docs: true
     }, (err, body) => {
       if (err) {
