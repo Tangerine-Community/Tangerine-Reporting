@@ -15,7 +15,7 @@ const nano = require('nano');
  */
 
 const createColumnHeaders = require('./assessment').createColumnHeaders;
-const saveHeaders = require('./assessment').saveHeaders;
+const dbQuery = require('./../utils/dbQuery');
 
 /**
  * Retrieves all workflow collections in the database.
@@ -55,9 +55,9 @@ const saveHeaders = require('./assessment').saveHeaders;
  */
 
 exports.all = (req, res) => {
-  getAllWorkflow(req.body.base_db)
+  dbQuery.getAllWorkflow(req.body.base_db)
     .then((data) => res.json(data))
-    .catch((err) => res.json(Error(err)))
+    .catch((err) => res.json(Error(err)));
 }
 
 /**
@@ -93,13 +93,13 @@ exports.generateHeader = (req, res) => {
   const resultDbUrl = req.body.result_db;
   let workflowId;
 
-  retrieveDoc(req.params.id, dbUrl)
+  dbQuery.retrieveDoc(req.params.id, dbUrl)
     .then((doc) => {
       workflowId = doc.workflowId;
       return createWorkflowHeaders(workflowId, dbUrl);
     })
     .then(async(colHeaders) => {
-      const saveResponse = await saveHeaders(colHeaders, workflowId, resultDbUrl);
+      const saveResponse = await dbQuery.saveDoc(colHeaders, workflowId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -136,13 +136,13 @@ exports.generateAll = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
 
-  getAllWorkflow(dbUrl)
+  dbQuery.getAllWorkflow(dbUrl)
     .then(async(data) => {
       let saveResponse;
       for (item of data) {
         let workflowId = item.id;
         let generatedWorkflowHeaders = await createWorkflowHeaders(workflowId, dbUrl);
-        saveResponse = await saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
+        saveResponse = await dbQuery.saveDoc(generatedWorkflowHeaders, workflowId, resultDbUrl);
       }
       res.json(saveResponse);
     })
@@ -169,7 +169,7 @@ const createWorkflowHeaders = function(docId, dbUrl) {
   let workflowHeaders = [];
 
   return new Promise ((resolve, reject) => {
-    retrieveDoc(docId, dbUrl)
+    dbQuery.retrieveDoc(docId, dbUrl)
       .then(async(data) => {
         let workflowCounts = {
           assessmentCount: 0,
@@ -199,57 +199,6 @@ const createWorkflowHeaders = function(docId, dbUrl) {
         resolve(workflowHeaders);
       })
       .catch((err) => reject(err));
-  });
-}
-
-
-/********************************************
- *    HELPER FUNCTIONS FOR DATABASE QUERY   *
- ********************************************
-*/
-
-
-/**
- * This function retrieves all workflow collections in the database.
- *
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} – all workflow documents.
- */
-
-const getAllWorkflow = function(dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'byCollection', {
-      key: 'workflow',
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(body.rows);
-    });
-  });
-}
-
-/**
- * This function retrieves a document from the database.
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Object} - retrieved document.
- */
-
-function retrieveDoc(docId, dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise ((resolve, reject) => {
-    BASE_DB.get(docId, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(body)
-    });
   });
 }
 

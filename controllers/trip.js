@@ -14,7 +14,7 @@ const _ = require('lodash');
  */
 
 const processResult = require('./result').generateResult;
-const saveResult = require('./result').saveResult;
+const dbQuery = require('./../utils/dbQuery');
 
 /**
  * Processes result for a workflow.
@@ -50,13 +50,13 @@ exports.processResult = (req, res) => {
   const docId = req.params.id;
   let tripId;
 
-  getWorkflowDoc(docId, dbUrl)
+  dbQuery.retrieveDoc(docId, dbUrl)
     .then((data) => {
       tripId = data.tripId;
       return processWorkflowResult(data.workflowId, dbUrl);
     })
     .then(async(result) => {
-      const saveResponse = await saveResult(result, tripId, resultDbUrl);
+      const saveResponse = await dbQuery.saveDoc(result, tripId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -93,7 +93,7 @@ exports.processAll = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
 
-  getAllResult(dbUrl)
+  dbQuery.getAllResult(dbUrl)
     .then(async(data) => {
       let saveResponse;
       for (item of data) {
@@ -102,10 +102,10 @@ exports.processAll = (req, res) => {
         if (!workflowId) {
           let docId = item.assessmentId || item.curriculumId;
           let assessmentResults = await processResult(docId, 0, dbUrl);
-          saveResponse = await saveResult(assessmentResults, item._id, resultDbUrl);
+          saveResponse = await dbQuery.saveDoc(assessmentResults, item._id, resultDbUrl);
         } else {
           let processedResult = await processWorkflowResult(workflowId, dbUrl);
-          saveResponse = await saveResult(processedResult, item.tripId, resultDbUrl);
+          saveResponse = await dbQuery.saveDoc(processedResult, item.tripId, resultDbUrl);
         }
       }
       res.json(saveResponse);
@@ -132,7 +132,7 @@ const processWorkflowResult = function(docId, dbUrl) {
   let workflowResults = {};
 
   return new Promise ((resolve, reject) => {
-    getWorkflowDoc(docId, dbUrl)
+    dbQuery.retrieveDoc(docId, dbUrl)
       .then(async(data) => {
         let workflowCounts = {
           assessmentCount: 0,
@@ -161,53 +161,6 @@ const processWorkflowResult = function(docId, dbUrl) {
         resolve(workflowResults);
       })
       .catch((err) => reject(err));
-  });
-}
-
-
-/********************************************
- *    HELPER FUNCTIONS FOR DATABASE QUERY   *
- ********************************************
-*/
-
-
-/**
- * This function retrieves all result collection in the database.
- *
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} – all result documents.
- */
-
-const getAllResult = function(dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', {
-      include_docs: true
-    }, (err, body) => {
-      if (err) reject(err);
-      let resultCollection = _.map(body.rows, (data) => data.doc);
-      resolve(resultCollection);
-    });
-  });
-}
-
-/**
- * This function retrieves a document from the database.
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Object} - retrieved document.
- */
-
-function getWorkflowDoc(docId, dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise ((resolve, reject) => {
-    BASE_DB.get(docId, (err, body) => {
-      if (err) reject(err);
-      resolve(body)
-    });
   });
 }
 

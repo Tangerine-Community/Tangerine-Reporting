@@ -2,16 +2,21 @@
  * This file processes the result of an assessment.
  * The processed result will serve as the values for CSV generation.
  *
- * Modules: generateResult, saveResult, getResultInChunks.
+ * Module: generateResult.
  */
 
 /**
- * Module dependencies
+ * Module dependencies.
  */
 
 const _ = require('lodash');
-const Excel = require('exceljs');
 const nano = require('nano');
+
+/**
+ * Local dependencies.
+ */
+
+const dbQuery = require('./../utils/dbQuery');
 
 /**
  * Define value maps for grid and survey values.
@@ -82,9 +87,9 @@ const surveyValueMap = {
  */
 
 exports.all = (req, res) => {
-  getAllResult(req.body.base_db)
+  dbQuery.getAllResult(req.body.base_db)
     .then((data) => res.json(data))
-    .catch((err) => res.json(Error(err)))
+    .catch((err) => res.json(Error(err)));
 }
 
 /**
@@ -123,13 +128,13 @@ exports.processResult = (req, res) => {
   const resultDbUrl = req.body.result_db;
   const docId = req.params.id;
 
-  retrieveDoc(docId, dbUrl)
+  dbQuery.retrieveDoc(docId, dbUrl)
     .then((data) => {
       let collectionId = data.assessmentId || data.curriculumId;
       return generateResult(collectionId, 0, dbUrl);
     })
     .then(async(result) => {
-      const saveResponse = await saveResult(result, docId, resultDbUrl);
+      const saveResponse = await dbQuery.saveDoc(result, docId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -167,7 +172,7 @@ exports.processAll = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
 
-  getAllResult(dbUrl)
+  dbQuery.getAllResult(dbUrl)
     .then(async(data) => {
       let saveResponse;
 
@@ -175,7 +180,7 @@ exports.processAll = (req, res) => {
         let docId = item.assessmentId || item.curriculumId;
         let ref = item._id;
         let processedResult = await generateResult(docId, 0, dbUrl);
-        saveResponse = await saveResult(processedResult, ref, resultDbUrl);
+        saveResponse = await dbQuery.saveDoc(processedResult, ref, resultDbUrl);
       }
       res.json(saveResponse);
     })
@@ -191,9 +196,11 @@ exports.processAll = (req, res) => {
 
 /**
  * This function processes the result for an assessment.
+ *
  * @param {string} docId - assessment id.
  * @param {number} count - count
  * @param {string} dbUrl - database url.
+ *
  * @returns {Object} - processed result for csv.
  */
 
@@ -201,7 +208,7 @@ const generateResult = function(docId, count = 0, dbUrl) {
   let result = {};
 
   return new Promise ((resolve, reject) => {
-    getResultInChunks(docId, dbUrl)
+    dbQuery.getResultInChunks(docId, dbUrl)
       .then((collections) => {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
 
@@ -282,146 +289,6 @@ const generateResult = function(docId, count = 0, dbUrl) {
       })
       .catch((err) => reject(err));
   });
-}
-
-
-/********************************************
- *    HELPER FUNCTIONS FOR DATABASE QUERY   *
- ********************************************
-*/
-
-
-/**
- * This function retrieves all result collection in the database.
- *
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} – all result documents.
- */
-
-const getAllResult = function(dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', {
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      let resultCollection = _.map(body.rows, (data) => data.doc);
-      resolve(resultCollection);
-    });
-  });
-}
-
-/**
- * This function retrieves a document from the database.
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Object} - retrieved document.
- */
-
-function retrieveDoc(docId, dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise ((resolve, reject) => {
-    BASE_DB.get(docId, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(body)
-    });
-  });
-}
-
-/**
- * This function saves/updates a document in the database.
- *
- * @param {Array} doc - document to be saved.
- * @param {string} key - key for indexing.
- * @param {string} dbUrl - url of the result database.
- *
- * @returns {Object} - saved document.
- */
-
-const saveResult = function(doc, key, dbUrl) {
-  const RESULT_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    RESULT_DB.get(key, (error, existingDoc) => {
-      let docObj = { processed_results: doc };
-      // if doc exists update it using its revision number.
-      if (!error) {
-        docObj._rev = existingDoc._rev;
-      }
-      RESULT_DB.insert(docObj, key, (err, body) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(body);
-      })
-    });
-  });
-}
-
-/**
- * This function retrieves a result document.
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- * @param {number} queryLimit - number of documents to be retrieved.
- * @param {number} skip - number of documents to be skipped.
- *
- * @returns {Object} - result documents.
- */
-
-function getResultById(docId, dbUrl, queryLimit = 0, skip = 0) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', {
-      limit: queryLimit,
-      skip: skip,
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      let resultCollection = _.filter(body.rows, (data) => data.doc.assessmentId === docId);
-      resolve({ offset: body.offset, totalRows: body.total_rows, resultCollection });
-    });
-  })
-}
-
-/**
- * This function retrieves result document in batches
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} - result documents.
- */
-
-async function getResultInChunks(docId, dbUrl) {
-  let queryLimit = 1000;
-  let firstResult = await getResultById(docId, dbUrl, queryLimit);
-  let lastPage = Math.floor(firstResult.totalRows / queryLimit) + (firstResult.totalRows % queryLimit);
-
-  if (firstResult.resultCollection.length === 0) {
-    let count = 0;
-    let view = (firstResult.offset / queryLimit) + 1;
-    let skip = queryLimit * view;
-
-    for (count; count <= lastPage; count++) {
-      skip = queryLimit + skip;
-      let nextResult = await getResultById(docId, dbUrl, queryLimit, skip);
-      if (nextResult.resultCollection.length  > 0) {
-        return nextResult.resultCollection;
-        break;
-      }
-    }
-  } else {
-    return firstResult.resultCollection;
-  }
 }
 
 /**********************************************
@@ -658,7 +525,3 @@ function translateGridValue(databaseValue) {
 };
 
 exports.generateResult = generateResult;
-
-exports.saveResult = saveResult;
-
-exports.getResultInChunks = getResultInChunks;
