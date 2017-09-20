@@ -146,7 +146,7 @@ exports.generateAll = (req, res) => {
       }
       res.json(saveResponse);
     })
-    .catch((err) => res.send(Error(err)))
+    .catch((err) => res.send(Error(err)));
 }
 
 /*****************************
