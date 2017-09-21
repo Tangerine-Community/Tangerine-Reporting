@@ -88,9 +88,9 @@ exports.getAllResult = (dbUrl) => {
  */
 
 exports.retrieveDoc = (docId, dbUrl) => {
-  const BASE_DB = nano(dbUrl);
+  const DB = nano(dbUrl);
   return new Promise ((resolve, reject) => {
-    BASE_DB.get(docId, (err, body) => {
+    DB.get(docId, (err, body) => {
       if (err) {
         reject(err);
       }

@@ -19,6 +19,7 @@ const nano = require('nano');
 
 const createHeaders = require('./assessment').createColumnHeaders;
 const processResult = require('./result').generateResult;
+const dbQuery = require('./../utils/dbQuery');
 
 /**
  * Generates a CSV file.
@@ -27,10 +28,9 @@ const processResult = require('./result').generateResult;
  *
  *    POST /generate_csv
  *
- *  The request object must contain the database url, result database url,
+ *  The request object must contain the result database url,
  *  generated header document id and the processed result document id.
  *       {
- *         "db_url": "http://admin:password@test.tangerine.org/database_name"
  *         "another_url": "http://admin:password@test.tangerine.org/database_name"
  *         "generated_header_doc_id": "0000B40F-4F39-494E-A363-D04F5EFA4744"
  *         "processed_result_doc_id": "e61318ac-e134-0321-9c23-a9e60fc8a6ae"
@@ -38,46 +38,24 @@ const processResult = require('./result').generateResult;
  *
  * Response:
  *
- * Returns the processed result.
+ *  Returns the processed result.
  *
  * @param req - HTTP request object
  * @param res - HTTP response object
  */
 
 exports.generate = (req, res) => {
-  const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
   const headerDocId = req.body.headerId;
   const resultDocId = req.body.resultId;
 
-  getDocument(headerDocId, dbUrl)
+  dbQuery.retrieveDoc(headerDocId, resultDbUrl)
     .then(async(docHeaders) => {
-      const result = await getDocument(resultDocId, dbUrl);
+      const result = await dbQuery.retrieveDoc(resultDocId, resultDbUrl);
       generateCSV(docHeaders, result);
-      res.json({message: 'CSV Successfully Generated'});
+      res.json({ message: 'CSV Successfully Generated' });
     })
     .catch((err) => Error(err));
-}
-
-/**
- * This function retrieves a document from the database.
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Object} - retrieved document.
- */
-
-const getDocument = function(docId, dbUrl) {
-  const RESULT_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    RESULT_DB.get(docId, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(body);
-    });
-  });
 }
 
 /**
@@ -101,8 +79,10 @@ const generateCSV = function(colSettings, resultData) {
     views: [{ xSplit: 1 }], pageSetup: { paperSize: 9, orientation: 'landscape' }
   });
 
+  // Add column headers and define column keys
   excelSheet.columns = colSettings.column_headers;
 
+  // Add rows by key-value using the column keys
   excelSheet.addRow(resultData.processed_results);
 
   let creationTime = new Date().toISOString();

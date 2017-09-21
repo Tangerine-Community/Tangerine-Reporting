@@ -20,8 +20,7 @@ const generateAssessmentHeaders = require('./assessment').createColumnHeaders;
 const processAssessmentResult = require('./result').generateResult;
 const generateWorkflowHeaders = require('./workflow').createWorkflowHeaders;
 const processWorkflowResult = require('./trip').processWorkflowResult;
-const saveHeaders = require('./assessment').saveHeaders;
-const saveResult = require('./result').saveResult;
+const saveDoc = require('./../utils/dbQuery').saveDoc;
 
 /**
  * Processes any recently changed document in the database based on its collection type.
@@ -77,26 +76,26 @@ exports.changes = (req, res) => {
     if (isWorkflowIdSet && isResult) {
       feed.pause();
       const workflowResult = await processWorkflowResult(workflowId, dbUrl);
-      await saveResult(workflowResult, tripId, resultDbUrl);
+      await saveDoc(workflowResult, tripId, resultDbUrl);
       setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
     }
     // TODO: Uncomment the code below
     // if (isWorkflowIdSet && isWorkflow) {
     //   feed.pause();
     //   const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
-    //   saveHeaders(workflowHeaders, workflowId, resultDbUrl);
+    //   saveDoc(workflowHeaders, workflowId, resultDbUrl);
     //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
     // }
     // if (!isWorkflowIdSet && isResult) {
     //   feed.pasue();
     //   const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
-    //   await saveHeaders(assessmentResult, docId, resultDbUrl);
+    //   await saveDoc(assessmentResult, docId, resultDbUrl);
     //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
     // }
     // if (isAssessment || isCurriculum || isQuestion || isSubtest) {
     //   feed.pasue();
     //   const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
-    //   await saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
+    //   await saveDoc(assessmentHeaders, assessmentId, resultDbUrl);
     //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
     // }
 
