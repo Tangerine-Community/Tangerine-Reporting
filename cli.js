@@ -19,6 +19,7 @@ const createColumnHeaders = require('./controllers/assessment').createColumnHead
 const processAssessmentResult = require('./controllers/result').generateResult;
 const createWorkflowHeaders = require('./controllers/workflow').createWorkflowHeaders;
 const processWorkflowResult = require('./controllers/trip').processWorkflowResult;
+const generateCSV = require('./controllers/generate_csv').generateCSV;
 
 const dbQuery = require('./utils/dbQuery');
 const dbConfig = require('./config');
@@ -204,11 +205,11 @@ tangerine
 
 tangerine
   .version('0.1.0')
-  .command('generate-all')
-  .description('generate headers or results based on the collection type')
-  .option('-a', '--assessment', 'generate all assessment headers')
-  .option('-r', '--result', 'generate all assessment results')
-  .option('-w', '--workflow', 'generate all workflow headers')
+  .command('create-all')
+  .description('create headers or results based on the collection type')
+  .option('-a', '--assessment', 'create all assessment headers')
+  .option('-r', '--result', 'create all assessment results')
+  .option('-w', '--workflow', 'create all workflow headers')
   .option('-t', '--workflow-result', 'generate all workflow results')
   .action((options) => {
     if (!options.A && !options.R && !options.W && !options.T) {
@@ -240,10 +241,25 @@ tangerine
     }
   }).on('--help', function() {
     console.log(chalk.blue('\n Examples: \n'));
-    console.log(chalk.blue('  $ tangerine-reporting generate-all -a'));
-    console.log(chalk.blue('  $ tangerine-reporting generate-all -r'));
-    console.log(chalk.blue('  $ tangerine-reporting generate-all -t'));
-    console.log(chalk.blue('  $ tangerine-reporting generate-all -w \n'));
+    console.log(chalk.blue('  $ tangerine-reporting create-all -a'));
+    console.log(chalk.blue('  $ tangerine-reporting create-all -r'));
+    console.log(chalk.blue('  $ tangerine-reporting create-all -t'));
+    console.log(chalk.blue('  $ tangerine-reporting create-all -w \n'));
+  });
+
+
+tangerine
+  .version('0.1.0')
+  .command('generate-csv <headerId> <resultId>')
+  .description('creates a csv file')
+  .action((headerId, resultId) => {
+    dbQuery.retrieveDoc(headerId, dbConfig.result_db)
+      .then(async(docHeaders) => {
+        const result = await dbQuery.retrieveDoc(resultId, dbConfig.result_db);
+        generateCSV(docHeaders, result);
+        console.log({ message: 'CSV Successfully Generated' });
+      })
+      .catch((err) => Error(err));
   });
 
 
