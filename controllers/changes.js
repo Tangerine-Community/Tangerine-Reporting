@@ -60,10 +60,10 @@ exports.changes = (req, res) => {
   // TODO: change since to "now"
   const feed = BASE_DB.follow({ since: 96000, include_docs: true });
 
-  feed.on('change', async(resp) => {
+  feed.on('change', (resp) => {
     feed.pause();
     processChangedDocument(resp, dbUrl, resultDbUrl);
-    setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
+    setTimeout(function() { feed.resume() }, 60 * 1000); // Resume after 1 minute.
   });
 
   feed.on('error', (err) => res.send(Error(err)));
@@ -86,12 +86,12 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const isQuestion = (collectionType === 'question') ? true : false;
   const isSubtest = (collectionType === 'subtest') ? true : false;
 
+  // TODO: Uncomment code below after review
   if (isWorkflowIdSet && isResult) {
     console.info('<<<=== PROCESSING A WORKFLOW RESULT ===>>>');
-    const workflowResult = await processWorkflowResult(workflowId, dbUrl);
-    await saveDoc(workflowResult, tripId, resultDbUrl);
+    // const workflowResult = await processWorkflowResult(workflowId, dbUrl);
+    // await saveDoc(workflowResult, tripId, resultDbUrl);
   }
-  // TODO: Uncomment code below after review
   if (isWorkflowIdSet && isWorkflow) {
     console.info('<<<=== PROCESSING A WORKFLOW COLLECTION  ===>>>');
     // const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);

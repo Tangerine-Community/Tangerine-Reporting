@@ -98,7 +98,7 @@ exports.generateHeader = (req, res) => {
 
   createColumnHeaders(assessmentId, 0, dbUrl)
     .then(async(result) => {
-      const saveResponse = await dbQuery.saveDoc(result, assessmentId, resultDbUrl);
+      const saveResponse = await dbQuery.saveHeaders(result, assessmentId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -142,7 +142,7 @@ exports.generateAll = (req, res) => {
       for(item of data) {
         let assessmentId = item.doc.assessmentId;
         let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbUrl);
-        saveResponse = await dbQuery.saveDoc(generatedHeaders, assessmentId, resultDbUrl);
+        saveResponse = await dbQuery.saveHeaders(generatedHeaders, assessmentId, resultDbUrl);
       }
       res.json(saveResponse);
     })

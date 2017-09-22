@@ -99,7 +99,7 @@ exports.generateHeader = (req, res) => {
       return createWorkflowHeaders(workflowId, dbUrl);
     })
     .then(async(colHeaders) => {
-      const saveResponse = await dbQuery.saveDoc(colHeaders, workflowId, resultDbUrl);
+      const saveResponse = await dbQuery.saveHeaders(colHeaders, workflowId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -142,7 +142,7 @@ exports.generateAll = (req, res) => {
       for (item of data) {
         let workflowId = item.id;
         let generatedWorkflowHeaders = await createWorkflowHeaders(workflowId, dbUrl);
-        saveResponse = await dbQuery.saveDoc(generatedWorkflowHeaders, workflowId, resultDbUrl);
+        saveResponse = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
       }
       res.json(saveResponse);
     })

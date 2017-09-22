@@ -44,7 +44,7 @@ async function generateAssessmentHeaders(data) {
   for (item of data) {
     let assessmentId = item.doc.assessmentId;
     let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbConfig.base_db);
-    response = await dbQuery.saveDoc(generatedHeaders, assessmentId, dbConfig.result_db);
+    response = await dbQuery.saveHeaders(generatedHeaders, assessmentId, dbConfig.result_db);
   }
   return response;
 }
@@ -62,7 +62,7 @@ async function generateworkflowHeaders(data) {
   for (item of data) {
     let assessmentId = item.doc.assessmentId;
     let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbConfig.base_db);
-    response = await dbQuery.saveDoc(generatedHeaders, assessmentId, dbConfig.result_db);
+    response = await dbQuery.saveHeaders(generatedHeaders, assessmentId, dbConfig.result_db);
   }
   return response;
 }
@@ -81,7 +81,7 @@ async function generateAssessmentResult(data) {
     let docId = item.assessmentId || item.curriculumId;
     let ref = item._id;
     let processedResult = await processAssessmentResult(docId, 0, dbConfig.base_db);
-    response = await dbQuery.saveDoc(processedResult, ref, dbConfig.result_db);
+    response = await dbQuery.saveResult(processedResult, ref, dbConfig.result_db);
   }
   return response;
 }
@@ -104,7 +104,7 @@ async function generateWorkflowResult(data) {
       response = await dbQuery.saveDoc(assessmentResults, item._id, dbConfig.result_db);
     } else {
       let processedResult = await processWorkflowResult(workflowId, dbUrl);
-      response = await dbQuery.saveDoc(processedResult, item.tripId, dbConfig.result_db);
+      response = await dbQuery.saveResult(processedResult, item.tripId, dbConfig.result_db);
     }
   }
   return response;

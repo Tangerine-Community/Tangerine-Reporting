@@ -134,7 +134,7 @@ exports.processResult = (req, res) => {
       return generateResult(collectionId, 0, dbUrl);
     })
     .then(async(result) => {
-      const saveResponse = await dbQuery.saveDoc(result, docId, resultDbUrl);
+      const saveResponse = await dbQuery.saveResult(result, docId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -180,7 +180,7 @@ exports.processAll = (req, res) => {
         let docId = item.assessmentId || item.curriculumId;
         let ref = item._id;
         let processedResult = await generateResult(docId, 0, dbUrl);
-        saveResponse = await dbQuery.saveDoc(processedResult, ref, resultDbUrl);
+        saveResponse = await dbQuery.saveResult(processedResult, ref, resultDbUrl);
       }
       res.json(saveResponse);
     })

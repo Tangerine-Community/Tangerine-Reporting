@@ -100,7 +100,7 @@ exports.retrieveDoc = (docId, dbUrl) => {
 }
 
 /**
- * This function saves/updates a document in the database.
+ * This function saves/updates generated headers in the result database.
  *
  * @param {Array} doc - document to be saved.
  * @param {string} key - key for indexing.
@@ -109,7 +109,36 @@ exports.retrieveDoc = (docId, dbUrl) => {
  * @returns {Object} - saved document.
  */
 
-exports.saveDoc = (doc, key, dbUrl) => {
+exports.saveHeaders = (doc, key, dbUrl) => {
+  const RESULT_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    RESULT_DB.get(key, (error, existingDoc) => {
+      let docObj = { column_headers: doc };
+      // if doc exists update it using its revision number.
+      if (!error) {
+        docObj._rev = existingDoc._rev;
+      }
+      RESULT_DB.insert(docObj, key, (err, body) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(body);
+      });
+    });
+  });
+}
+
+/**
+ * This function saves/updates processed result in the result database.
+ *
+ * @param {Object} doc - document to be saved.
+ * @param {string} key - key for indexing.
+ * @param {string} dbUrl - url of the result database.
+ *
+ * @returns {Object} - saved document.
+ */
+
+exports.saveResult = (doc, key, dbUrl) => {
   const RESULT_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     RESULT_DB.get(key, (error, existingDoc) => {
@@ -123,7 +152,7 @@ exports.saveDoc = (doc, key, dbUrl) => {
           reject(err);
         }
         resolve(body);
-      })
+      });
     });
   });
 }

@@ -56,7 +56,7 @@ exports.processResult = (req, res) => {
       return processWorkflowResult(data.workflowId, dbUrl);
     })
     .then(async(result) => {
-      const saveResponse = await dbQuery.saveDoc(result, tripId, resultDbUrl);
+      const saveResponse = await dbQuery.saveResult(result, tripId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -102,10 +102,10 @@ exports.processAll = (req, res) => {
         if (!workflowId) {
           let docId = item.assessmentId || item.curriculumId;
           let assessmentResults = await processResult(docId, 0, dbUrl);
-          saveResponse = await dbQuery.saveDoc(assessmentResults, item._id, resultDbUrl);
+          saveResponse = await dbQuery.saveResult(assessmentResults, item._id, resultDbUrl);
         } else {
           let processedResult = await processWorkflowResult(workflowId, dbUrl);
-          saveResponse = await dbQuery.saveDoc(processedResult, item.tripId, resultDbUrl);
+          saveResponse = await dbQuery.saveResult(processedResult, item.tripId, resultDbUrl);
         }
       }
       res.json(saveResponse);
