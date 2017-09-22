@@ -21,6 +21,7 @@ const processAssessmentResult = require('./result').generateResult;
 const generateWorkflowHeaders = require('./workflow').createWorkflowHeaders;
 const processWorkflowResult = require('./trip').processWorkflowResult;
 const saveDoc = require('./../utils/dbQuery').saveDoc;
+const dbConfig = require('./../config');
 
 /**
  * Processes any recently changed document in the database based on its collection type.
@@ -53,55 +54,59 @@ const saveDoc = require('./../utils/dbQuery').saveDoc;
  */
 
 exports.changes = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.base_db || dbConfig.base_db;
+  const resultDbUrl = req.body.result_db || dbConfig.result_db;
   const BASE_DB = nano(dbUrl);
-  const feed = BASE_DB.follow({ since: 96009, include_docs: true });
+  // TODO: change since to "now"
+  const feed = BASE_DB.follow({ since: 96000, include_docs: true });
 
   feed.on('change', async(resp) => {
-    const docId = resp.doc._id;
-    const assessmentId = resp.doc.assessmentId;
-    const workflowId = resp.doc.workflowId;
-    const tripId = resp.doc.tripId;
-    const collectionType = resp.doc.collection;
-
-    const isWorkflowIdSet = (workflowId) ? true : false;
-    const isResult = (collectionType === 'result') ? true : false;
-    const isWorkflow = (collectionType === 'workflow') ? true : false;
-    const isAssessment = (collectionType === 'assessment') ? true : false;
-    const isCurriculum = (collectionType === 'curriculum') ? true : false;
-    const isQuestion = (collectionType === 'question') ? true : false;
-    const isSubtest = (collectionType === 'subtest') ? true : false;
-
-    if (isWorkflowIdSet && isResult) {
-      feed.pause();
-      const workflowResult = await processWorkflowResult(workflowId, dbUrl);
-      await saveDoc(workflowResult, tripId, resultDbUrl);
-      setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
-    }
-    // TODO: Uncomment the code below
-    // if (isWorkflowIdSet && isWorkflow) {
-    //   feed.pause();
-    //   const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
-    //   saveDoc(workflowHeaders, workflowId, resultDbUrl);
-    //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
-    // }
-    // if (!isWorkflowIdSet && isResult) {
-    //   feed.pasue();
-    //   const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
-    //   await saveDoc(assessmentResult, docId, resultDbUrl);
-    //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
-    // }
-    // if (isAssessment || isCurriculum || isQuestion || isSubtest) {
-    //   feed.pasue();
-    //   const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
-    //   await saveDoc(assessmentHeaders, assessmentId, resultDbUrl);
-    //   setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
-    // }
-
+    feed.pause();
+    processChangedDocument(resp, dbUrl, resultDbUrl);
+    setTimeout(function() { feed.resume() }, 10 * 60 * 1000); // Resume after 10 minutes.
   });
 
   feed.on('error', (err) => res.send(Error(err)));
 
   feed.follow();
 }
+
+const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
+  const docId = resp.doc._id;
+  const assessmentId = resp.doc.assessmentId;
+  const workflowId = resp.doc.workflowId;
+  const tripId = resp.doc.tripId;
+  const collectionType = resp.doc.collection;
+
+  const isWorkflowIdSet = (workflowId) ? true : false;
+  const isResult = (collectionType === 'result') ? true : false;
+  const isWorkflow = (collectionType === 'workflow') ? true : false;
+  const isAssessment = (collectionType === 'assessment') ? true : false;
+  const isCurriculum = (collectionType === 'curriculum') ? true : false;
+  const isQuestion = (collectionType === 'question') ? true : false;
+  const isSubtest = (collectionType === 'subtest') ? true : false;
+
+  if (isWorkflowIdSet && isResult) {
+    console.info('<<<=== PROCESSING A WORKFLOW RESULT ===>>>');
+    const workflowResult = await processWorkflowResult(workflowId, dbUrl);
+    await saveDoc(workflowResult, tripId, resultDbUrl);
+  }
+  // TODO: Uncomment code below after review
+  if (isWorkflowIdSet && isWorkflow) {
+    console.info('<<<=== PROCESSING A WORKFLOW COLLECTION  ===>>>');
+    // const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
+    // saveDoc(workflowHeaders, workflowId, resultDbUrl);
+  }
+  if (!isWorkflowIdSet && isResult) {
+    console.info('<<<=== PROCESSING AN ASSESSMENT COLLECTION  ===>>>');
+    // const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
+    // await saveDoc(assessmentResult, docId, resultDbUrl);
+  }
+  if (isAssessment || isCurriculum || isQuestion || isSubtest) {
+    console.info('<<<=== PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>');
+    // const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
+    // await saveDoc(assessmentHeaders, assessmentId, resultDbUrl);
+  }
+}
+
+exports.processChangedDocument = processChangedDocument;
