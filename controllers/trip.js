@@ -98,7 +98,6 @@ exports.processAll = (req, res) => {
       let saveResponse;
       for (item of data) {
         let workflowId = item.workflowId;
-
         if (!workflowId) {
           let docId = item.assessmentId || item.curriculumId;
           let assessmentResults = await processResult(docId, 0, dbUrl);

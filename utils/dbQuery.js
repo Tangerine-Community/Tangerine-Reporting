@@ -140,9 +140,18 @@ exports.saveHeaders = (doc, key, dbUrl) => {
 
 exports.saveResult = (doc, key, dbUrl) => {
   const RESULT_DB = nano(dbUrl);
+  const cloneDoc = _.clone(doc);
+
   return new Promise((resolve, reject) => {
     RESULT_DB.get(key, (error, existingDoc) => {
-      let docObj = { processed_results: doc };
+      delete doc.indexKeys;
+      let docObj = {
+        parent_id: cloneDoc.indexKeys.parent_id,
+        result_year: cloneDoc.indexKeys.year,
+        result_month: cloneDoc.indexKeys.month,
+        result_day: cloneDoc.indexKeys.day,
+        processed_results: doc
+      };
       // if doc exists update it using its revision number.
       if (!error) {
         docObj._rev = existingDoc._rev;

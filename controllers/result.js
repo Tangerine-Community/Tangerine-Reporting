@@ -211,8 +211,16 @@ const generateResult = function(docId, count = 0, dbUrl) {
     dbQuery.getResultInChunks(docId, dbUrl)
       .then((collections) => {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
+        let indexKeys = {};
 
         for (data of collections) {
+          if (count === 0) {
+            indexKeys.year  = new Date(data.doc.start_time).getFullYear().toString();
+            indexKeys.month = new Date(data.doc.start_time).toLocaleString('en-GB', { month: 'short' });
+            indexKeys.day   = new Date(data.doc.start_time).getDay().toString();
+            indexKeys.parent_id = data.doc.workflowId || data.doc.assessmentId;
+            result.indexKeys = indexKeys;
+          }
           result[`${data.doc.assessmentId}.assessmentId${assessmentSuffix}`] = data.doc.assessmentId;
           result[`${data.doc.assessmentId}.assessmentName${assessmentSuffix}`] = data.doc.assessmentName;
           result[`${data.doc.assessmentId}.enumerator${assessmentSuffix}`] = data.doc.enumerator;
