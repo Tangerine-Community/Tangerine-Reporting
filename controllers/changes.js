@@ -78,6 +78,7 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const workflowId = resp.doc.workflowId;
   const tripId = resp.doc.tripId;
   const collectionType = resp.doc.collection;
+  const count = 0;
 
   const isWorkflowIdSet = (workflowId) ? true : false;
   const isResult = (collectionType === 'result') ? true : false;
@@ -101,13 +102,13 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   }
   if (!isWorkflowIdSet && isResult) {
     console.info('<<<=== START PROCESSING ASSESSMENT RESULT  ===>>>');
-    const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
+    const assessmentResult = await processAssessmentResult(assessmentId, count, dbUrl);
     await saveResult(assessmentResult, docId, resultDbUrl);
     console.info('<<<=== PROCESSING ASSESSMENT RESULT ===>>>');
   }
   if (isAssessment || isCurriculum || isQuestion || isSubtest) {
     console.info('<<<=== START PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>');
-    const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
+    const assessmentHeaders = await generateAssessmentHeaders(assessmentId, count, dbUrl);
     await saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
     console.info('<<<=== END PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION ===>>>');
   }
