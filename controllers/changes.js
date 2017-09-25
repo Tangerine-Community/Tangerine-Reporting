@@ -20,7 +20,8 @@ const generateAssessmentHeaders = require('./assessment').createColumnHeaders;
 const processAssessmentResult = require('./result').generateResult;
 const generateWorkflowHeaders = require('./workflow').createWorkflowHeaders;
 const processWorkflowResult = require('./trip').processWorkflowResult;
-const saveDoc = require('./../utils/dbQuery').saveDoc;
+const saveHeaders = require('./../utils/dbQuery').saveHeaders;
+const saveResult = require('./../utils/dbQuery').saveResult;
 const dbConfig = require('./../config');
 
 /**
@@ -63,7 +64,7 @@ exports.changes = (req, res) => {
   feed.on('change', (resp) => {
     feed.pause();
     processChangedDocument(resp, dbUrl, resultDbUrl);
-    setTimeout(function() { feed.resume() }, 60 * 1000); // Resume after 1 minute.
+    setTimeout(function() { feed.resume() }, 10 * 1000); // Resume after 10s.
   });
 
   feed.on('error', (err) => res.send(Error(err)));
@@ -86,26 +87,29 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const isQuestion = (collectionType === 'question') ? true : false;
   const isSubtest = (collectionType === 'subtest') ? true : false;
 
-  // TODO: Uncomment code below after review
   if (isWorkflowIdSet && isResult) {
-    console.info('<<<=== PROCESSING A WORKFLOW RESULT ===>>>');
-    // const workflowResult = await processWorkflowResult(workflowId, dbUrl);
-    // await saveDoc(workflowResult, tripId, resultDbUrl);
+    console.info('<<<=== START PROCESSING WORKFLOW RESULT ===>>>');
+    const workflowResult = await processWorkflowResult(workflowId, dbUrl);
+    await saveResult(workflowResult, tripId, resultDbUrl);
+    console.info('<<<=== END PROCESSING WORKFLOW RESULT ===>>>');
   }
   if (isWorkflowIdSet && isWorkflow) {
-    console.info('<<<=== PROCESSING A WORKFLOW COLLECTION  ===>>>');
-    // const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
-    // saveDoc(workflowHeaders, workflowId, resultDbUrl);
+    console.info('<<<=== START PROCESSING WORKFLOW COLLECTION  ===>>>');
+    const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
+    saveHeaders(workflowHeaders, workflowId, resultDbUrl);
+    console.info('<<<=== END PROCESSING WORKFLOW COLLECTION ===>>>');
   }
   if (!isWorkflowIdSet && isResult) {
-    console.info('<<<=== PROCESSING AN ASSESSMENT COLLECTION  ===>>>');
-    // const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
-    // await saveDoc(assessmentResult, docId, resultDbUrl);
+    console.info('<<<=== START PROCESSING ASSESSMENT RESULT  ===>>>');
+    const assessmentResult = await processAssessmentResult(assessmentId, dbUrl);
+    await saveResult(assessmentResult, docId, resultDbUrl);
+    console.info('<<<=== PROCESSING ASSESSMENT RESULT ===>>>');
   }
   if (isAssessment || isCurriculum || isQuestion || isSubtest) {
-    console.info('<<<=== PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>');
-    // const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
-    // await saveDoc(assessmentHeaders, assessmentId, resultDbUrl);
+    console.info('<<<=== START PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>');
+    const assessmentHeaders = await generateAssessmentHeaders(assessmentId, dbUrl);
+    await saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
+    console.info('<<<=== END PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION ===>>>');
   }
 }
 

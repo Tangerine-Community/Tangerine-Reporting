@@ -74,7 +74,7 @@ const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 feed.on('change', async(resp) => {
   feed.pause();
   processChangedDocument(resp, dbConfig.base_db, dbConfig.result_db);
-  setTimeout(function() { feed.resume(); }, 60 * 1000); // Resume after 1 minute.
+  setTimeout(function() { feed.resume(); }, 10 * 1000); // Resume after 10s.
 });
 
 feed.on('error', (err) => Error(err));

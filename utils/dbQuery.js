@@ -277,3 +277,27 @@ function getResultById (docId, dbUrl, queryLimit = 0, skip = 0) {
     });
   })
 }
+
+/**
+ * This function retrieves all processed result for a given document id
+ *
+ * @param {string} ref - id of document.
+ * @param {string} dbUrl - database url.
+ *
+ * @returns {Array} - result documents.
+ */
+
+exports.getProcessedResults = function (ref, dbUrl) {
+  const RESULT_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    RESULT_DB.view('reporting', 'byParentId', {
+      key: ref,
+      include_docs: true
+    }, (err, body) => {
+      if (err) {
+        reject(err);
+      }
+      resolve(body.rows)
+    });
+  });
+}
