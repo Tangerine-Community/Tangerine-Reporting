@@ -94,7 +94,7 @@ exports.retrieveDoc = (docId, dbUrl) => {
       if (err) {
         reject(err);
       }
-      resolve(body)
+      resolve(body);
     });
   });
 }

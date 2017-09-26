@@ -58,8 +58,7 @@ exports.changes = (req, res) => {
   const dbUrl = req.body.base_db || dbConfig.base_db;
   const resultDbUrl = req.body.result_db || dbConfig.result_db;
   const BASE_DB = nano(dbUrl);
-  // TODO: change since to "now"
-  const feed = BASE_DB.follow({ since: 96000, include_docs: true });
+  const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 
   feed.on('change', (resp) => {
     feed.pause();
@@ -94,17 +93,17 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
     await saveResult(workflowResult, tripId, resultDbUrl);
     console.info('<<<=== END PROCESSING WORKFLOW RESULT ===>>>');
   }
-  if (isWorkflowIdSet && isWorkflow) {
-    console.info('<<<=== START PROCESSING WORKFLOW COLLECTION  ===>>>');
-    const workflowHeaders = await generateWorkflowHeaders(workflowId, dbUrl);
-    saveHeaders(workflowHeaders, workflowId, resultDbUrl);
-    console.info('<<<=== END PROCESSING WORKFLOW COLLECTION ===>>>');
-  }
   if (!isWorkflowIdSet && isResult) {
     console.info('<<<=== START PROCESSING ASSESSMENT RESULT  ===>>>');
     const assessmentResult = await processAssessmentResult(assessmentId, count, dbUrl);
     await saveResult(assessmentResult, docId, resultDbUrl);
-    console.info('<<<=== PROCESSING ASSESSMENT RESULT ===>>>');
+    console.info('<<<=== END PROCESSING ASSESSMENT RESULT ===>>>');
+  }
+  if (isWorkflow) {
+    console.info('<<<=== START PROCESSING WORKFLOW COLLECTION  ===>>>');
+    const workflowHeaders = await generateWorkflowHeaders(docId, dbUrl);
+    await saveHeaders(workflowHeaders, docId, resultDbUrl);
+    console.info('<<<=== END PROCESSING WORKFLOW COLLECTION ===>>>');
   }
   if (isAssessment || isCurriculum || isQuestion || isSubtest) {
     console.info('<<<=== START PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>');

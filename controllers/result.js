@@ -239,7 +239,9 @@ const generateResult = function(docId, count = 0, dbUrl) {
             timestampCount: 0
           };
 
-          for (doc of data.doc.subtestData) {
+          let subtestData = data.doc.subtestData;
+          subtestData = _.isArray(subtestData) ? subtestData : [subtestData];
+          for (doc of subtestData) {
             if (doc.prototype === 'location') {
               let location = processLocationResult(doc, subtestCounts);
               result = _.assignIn(result, location);
