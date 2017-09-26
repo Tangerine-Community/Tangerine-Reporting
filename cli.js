@@ -24,6 +24,7 @@ const generateCSV = require('./controllers/generate_csv').generateCSV;
 const dbQuery = require('./utils/dbQuery');
 const dbConfig = require('./config');
 
+
 /******************************************
  *  HELPER FUNCTIONS FOR GENERATING AND   *
  *      SAVING HEADERS AND RESULTS        *
@@ -115,36 +116,47 @@ async function generateWorkflowResult(data) {
  **********************
 */
 
+/**
+ * This part is executed when the command `tangerine-reporting assessments` is run.
+ */
 tangerine
   .version('0.1.0')
-  .command('assessment [dbUrl]')
+  .command('assessments [dbUrl]')
   .description('Retrieves all assessments in the database')
   .action(async(dbUrl) => {
     const db = dbConfig.base_db || dbUrl;
     console.log(await dbQuery.getAllAssessment(db));
   });
 
-
+/**
+ * This part is executed when the command `tangerine-reporting workflows` is run.
+ */
 tangerine
   .version('0.1.0')
-  .command('workflow [dbUrl]')
+  .command('workflows [dbUrl]')
   .description('Retrieves all workflows in the database')
   .action(async(dbUrl) => {
     const db = dbConfig.base_db || dbUrl;
     console.log(await dbQuery.getAllWorkflow(db));
   });
 
-
+/**
+ * This part is executed when the command `tangerine-reporting results` is run.
+ */
 tangerine
   .version('0.1.0')
-  .command('result [dbUrl]')
+  .command('results [dbUrl]')
   .description('Retrieves all results in the database')
   .action(async(dbUrl) => {
     const db = dbConfig.base_db || dbUrl;
     console.log(await dbQuery.getAllResult(db));
   });
 
-
+/**
+ * This part is executed when the command `tangerine-reporting assessment-header <assessment_id>` is run.
+ *
+ * @param {string} id - assessment id is required.
+ */
 tangerine
   .version('0.1.0')
   .command('assessment-header <id>')
@@ -157,7 +169,11 @@ tangerine
       .catch((err) => Error(err));
   });
 
-
+/**
+ * This part is executed when the command `tangerine-reporting assessment-result <assessment_id>` is run.
+ *
+ * @param {string} id - assessment id is required.
+ */
 tangerine
   .version('0.1.0')
   .command('assessment-result <id>')
@@ -170,7 +186,11 @@ tangerine
       .catch((err) => Error(err));
   });
 
-
+/**
+ * This part is executed when the command `tangerine-reporting workflow-header <workflow_id>` is run.
+ *
+ * @param {string} id - workflow id is required.
+ */
 tangerine
   .version('0.1.0')
   .command('workflow-header <id>')
@@ -183,7 +203,11 @@ tangerine
       .catch((err) => Error(err));
   });
 
-
+/**
+ * This part is executed when the command `tangerine-reporting workflow-result <workflow_id>` is run.
+ *
+ * @param {string} id - workflow id is required.
+ */
 tangerine
   .version('0.1.0')
   .command('workflow-result <id>')
@@ -202,7 +226,12 @@ tangerine
       .catch((err) => Error(err));
   });
 
-
+/**
+ * This part is executed when the command `tangerine-reporting create-all [flags]` is run.
+ *
+ * The various flags are required for this to execute.
+ *
+ */
 tangerine
   .version('0.1.0')
   .command('create-all')
@@ -213,30 +242,34 @@ tangerine
   .option('-t', '--workflow-result', 'generate all workflow results')
   .action((options) => {
     if (!options.A && !options.R && !options.W && !options.T) {
-      console.log(chalk.red('Please select a flag either "-a", "-r", "t", or "-w" flag along with your command. \n'));
+      console.log(chalk.red('Please select a flag either "-a", "-r", "-t", or "-w" flag along with your command. \n'));
     }
     if (options.A) {
       dbQuery.getAllAssessment(dbConfig.base_db)
       .then(async(data) => {
-        generateAssessmentHeaders(data);
+        await generateAssessmentHeaders(data);
+        console.log(chalk.green('✓ Successfully generated all assessment headers'));
       }).catch((err) => Error(err));
     }
     if (options.W) {
       dbQuery.getAllWorkflow(dbConfig.base_db)
       .then(async(data) => {
-        generateworkflowHeaders(data);
+        await generateworkflowHeaders(data);
+        console.log(chalk.green('✓ Successfully generated all workflow headers'));
       }).catch((err) => Error(err));
     }
     if (options.R)  {
       dbQuery.getAllResult(dbConfig.base_db)
       .then(async(data) => {
-        generateAssessmentResult(data);
+        await generateAssessmentResult(data);
+        console.log(chalk.green('✓ Successfully processed all assessment results'));
       }).catch((err) => Error(err));
     }
     if (options.T) {
       dbQuery.getAllWorkflow(dbConfig.base_db)
       .then(async(data) => {
-        generateWorkflowResult(data);
+        await generateWorkflowResult(data);
+        console.log(chalk.green('✓ Successfully generated all workflow results'));
       }).catch((err) => Error(err));
     }
   }).on('--help', function() {
@@ -247,7 +280,12 @@ tangerine
     console.log(chalk.blue('  $ tangerine-reporting create-all -w \n'));
   });
 
-
+/**
+ * This part is executed when the command `tangerine-reporting generate-csv <header_id> <result_id` is run.
+ *
+ * @param {string} headerId - generate header id from the result database is required.
+ * @param {string} resultId - processed result id from the result database is required.
+ */
 tangerine
   .version('0.1.0')
   .command('generate-csv <headerId> <resultId>')
@@ -256,8 +294,8 @@ tangerine
     dbQuery.retrieveDoc(headerId, dbConfig.result_db)
       .then(async(docHeaders) => {
         const result = await dbQuery.retrieveDoc(resultId, dbConfig.result_db);
-        generateCSV(docHeaders, result);
-        console.log({ message: 'CSV Successfully Generated' });
+        await generateCSV(docHeaders, result);
+        console.log(chalk.green('✓ CSV Successfully Generated'));
       })
       .catch((err) => Error(err));
   });
@@ -269,4 +307,4 @@ if (process.argv.length === 0) {
   tangerine.help();
 }
 
-console.log(chalk.green('✓ Tangerine Reporting Cli Tool'));
+console.log(chalk.green('✓ Tangerine Reporting CLI Tool'));
