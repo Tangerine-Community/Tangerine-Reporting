@@ -227,9 +227,9 @@ exports.getQuestionBySubtestId = (subtestId, dbUrl) => {
  */
 
 exports.getResultInChunks = async(docId, dbUrl) => {
-  let queryLimit = 1000;
+  let queryLimit = 10000;
   let firstResult = await getResultById(docId, dbUrl, queryLimit);
-  let lastPage = Math.floor(firstResult.totalRows / queryLimit) + (firstResult.totalRows % queryLimit);
+  let lastPage = Math.floor(firstResult.totalRows / queryLimit) + 1;
 
   if (firstResult.resultCollection.length === 0) {
     let count = 0;
