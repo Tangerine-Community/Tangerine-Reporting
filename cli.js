@@ -102,7 +102,7 @@ async function generateWorkflowResult(data) {
     if (!workflowId) {
       let docId = item.assessmentId || item.curriculumId;
       let assessmentResults = await processAssessmentResult(docId, 0, dbConfig.base_db);
-      response = await dbQuery.saveDoc(assessmentResults, item._id, dbConfig.result_db);
+      response = await dbQuery.saveResult(assessmentResults, item._id, dbConfig.result_db);
     } else {
       let processedResult = await processWorkflowResult(workflowId, dbUrl);
       response = await dbQuery.saveResult(processedResult, item.tripId, dbConfig.result_db);
@@ -126,6 +126,7 @@ tangerine
   .action(async(dbUrl) => {
     const db = dbConfig.base_db || dbUrl;
     console.log(await dbQuery.getAllAssessment(db));
+    console.log(chalk.green('✓ Successfully retrieve all assessments'));
   });
 
 /**
@@ -138,6 +139,7 @@ tangerine
   .action(async(dbUrl) => {
     const db = dbConfig.base_db || dbUrl;
     console.log(await dbQuery.getAllWorkflow(db));
+    console.log(chalk.green('✓ Successfully retrieve all workflows'));
   });
 
 /**
@@ -150,6 +152,7 @@ tangerine
   .action(async(dbUrl) => {
     const db = dbConfig.base_db || dbUrl;
     console.log(await dbQuery.getAllResult(db));
+    console.log(chalk.green('✓ Successfully retrieve all results'));
   });
 
 /**
@@ -164,7 +167,8 @@ tangerine
   .action((id) => {
     createColumnHeaders(id, 0, dbConfig.base_db)
       .then(async(data) => {
-        console.log(await dbQuery.saveDoc(data, id, dbConfig.result_db));
+        console.log(await dbQuery.saveHeaders(data, id, dbConfig.result_db));
+        console.log(chalk.green('✓ Successfully generate and save assessment header'));
       })
       .catch((err) => Error(err));
   });
@@ -181,7 +185,8 @@ tangerine
   .action((id) => {
     processAssessmentResult(id, 0, dbConfig.base_db)
       .then(async(result) => {
-        console.log(await dbQuery.saveDoc(result, id, dbConfig.result_db));
+        console.log(await dbQuery.saveResult(result, id, dbConfig.result_db));
+        console.log(chalk.green('✓ Successfully process and save assessment result'));
       })
       .catch((err) => Error(err));
   });
@@ -198,7 +203,8 @@ tangerine
   .action((id) => {
     createWorkflowHeaders(id, dbConfig.base_db)
       .then(async(data) => {
-        console.log(await dbQuery.saveDoc(data, id, dbConfig.result_db));
+        console.log(await dbQuery.saveHeaders(data, id, dbConfig.result_db));
+        console.log(chalk.green('✓ Successfully generate and save workflow header'));
       })
       .catch((err) => Error(err));
   });
@@ -221,7 +227,8 @@ tangerine
         return processWorkflowResult(data.workflowId, dbConfig.base_db);
       })
       .then(async(result) => {
-        console.log(await dbQuery.saveDoc(result, tripId, dbConfig.result_db));
+        console.log(await dbQuery.saveResult(result, tripId, dbConfig.result_db));
+        console.log(chalk.green('✓ Successfully process and save workflow result'));
       })
       .catch((err) => Error(err));
   });
@@ -248,28 +255,28 @@ tangerine
       dbQuery.getAllAssessment(dbConfig.base_db)
       .then(async(data) => {
         await generateAssessmentHeaders(data);
-        console.log(chalk.green('✓ Successfully generated all assessment headers'));
+        console.log(chalk.green('✓ Successfully generate and save all assessment headers'));
       }).catch((err) => Error(err));
     }
     if (options.W) {
       dbQuery.getAllWorkflow(dbConfig.base_db)
       .then(async(data) => {
         await generateworkflowHeaders(data);
-        console.log(chalk.green('✓ Successfully generated all workflow headers'));
+        console.log(chalk.green('✓ Successfully generate and save all workflow headers'));
       }).catch((err) => Error(err));
     }
     if (options.R)  {
       dbQuery.getAllResult(dbConfig.base_db)
       .then(async(data) => {
         await generateAssessmentResult(data);
-        console.log(chalk.green('✓ Successfully processed all assessment results'));
+        console.log(chalk.green('✓ Successfully processe and save all assessment results'));
       }).catch((err) => Error(err));
     }
     if (options.T) {
       dbQuery.getAllWorkflow(dbConfig.base_db)
       .then(async(data) => {
         await generateWorkflowResult(data);
-        console.log(chalk.green('✓ Successfully generated all workflow results'));
+        console.log(chalk.green('✓ Successfully generate and save all workflow results'));
       }).catch((err) => Error(err));
     }
   }).on('--help', function() {
