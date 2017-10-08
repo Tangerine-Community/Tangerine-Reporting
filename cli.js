@@ -308,6 +308,19 @@ tangerine
   });
 
 
+tangerine
+  .version('0.1.0')
+  .command('get <id>')
+  .description('retrieve a document from the database')
+  .action(function(id) {
+    dbQuery.retrieveDoc(id, dbConfig.base_db)
+      .then((data) => {
+        console.log(data);
+        console.log(chalk.green('✓ Successfully get document'));
+      })
+      .catch((err) => Error(err));
+  });
+
 tangerine.parse(process.argv);
 
 if (process.argv.length === 0) {
