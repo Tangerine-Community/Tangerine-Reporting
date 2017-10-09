@@ -58,7 +58,7 @@ const dbQuery = require('./../utils/dbQuery');
 
 exports.all = (req, res) => {
   dbQuery.getAllAssessment(req.body.base_db)
-    .then((data) => res.json(data))
+    .then((data) => res.json({ count: data.length, assessments: data }))
     .catch((err) => res.send(Error(err)));
 }
 
@@ -69,7 +69,7 @@ exports.all = (req, res) => {
  *
  *    POST /assessment/headers/:id
  *
- *  where id refers to the id of the assessment document.
+ *  where id refers to the id of the assessment document i.e. '_id' in couchDB.
  *
  *  The request object must contain the main database url and a
  *  result database url where the generated header will be saved.
@@ -94,12 +94,14 @@ exports.all = (req, res) => {
 exports.generateHeader = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
-  const assessmentId = req.params.id;
+  const docId = req.params.id;
 
-  createColumnHeaders(assessmentId, 0, dbUrl)
-    .then(async(result) => {
-      const saveResponse = await dbQuery.saveHeaders(result, assessmentId, resultDbUrl);
-      res.json(saveResponse);
+  createColumnHeaders(docId, 0, dbUrl)
+    .then(async(colHeaders) => {
+      let collection = colHeaders.shift();
+      let assessmentId = collection.assessmentId;
+      const saveResponse = await dbQuery.saveHeaders(colHeaders, assessmentId, resultDbUrl);
+      res.json({ saveResponse, colHeaders });
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -172,6 +174,7 @@ const createColumnHeaders = function(docId, count = 0, dbUrl) {
       .then((item) => {
         if (item.assessmentId) {
           let assessmentSuffix = count > 0 ? `_${count}` : '';
+          assessments.push({ assessmentId: item.assessmentId });
           assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${item.assessmentId}.assessmentId${assessmentSuffix}` });
           assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${item.assessmentId}.assessmentName${assessmentSuffix}` });
           assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${item.assessmentId}.enumerator${assessmentSuffix}` });
