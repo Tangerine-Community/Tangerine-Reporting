@@ -187,12 +187,15 @@ tangerine
   .command('assessment-result <id>')
   .description('process result for an assessment')
   .action((id) => {
-    processAssessmentResult(id, 0, dbConfig.base_db)
-      .then(async(result) => {
-        console.log(await dbQuery.saveResult(result, id, dbConfig.result_db));
-        console.log(chalk.green('✓ Successfully process and save assessment result'));
-      })
-      .catch((err) => Error(err));
+    dbQuery.retrieveDoc(id, dbConfig.base_db)
+    .then(async(data) => {
+      let resultDoc = { doc: data };
+      const result = processAssessmentResult(resultDoc);
+      const saveResponse = await dbQuery.saveResult(result, dbConfig.result_db);
+      console.log(saveResponse);
+      console.log(chalk.green('✓ Successfully process and save assessment result'));
+    })
+    .catch((err) => Error(err));
   });
 
 /**

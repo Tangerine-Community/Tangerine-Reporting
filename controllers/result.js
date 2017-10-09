@@ -127,11 +127,11 @@ exports.processResult = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
   const docId = req.params.id;
-  const count = 0;
 
-  dbQuery.getResults(docId, dbUrl)
+  dbQuery.retrieveDoc(docId, dbUrl)
     .then(async(data) => {
-      const result = generateResult(data, count);
+      let resultDoc = { doc: data };
+      const result = generateResult(resultDoc);
       const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
       res.json({ saveResponse, result });
     })
