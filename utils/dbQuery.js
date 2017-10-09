@@ -138,25 +138,27 @@ exports.saveHeaders = (doc, key, dbUrl) => {
  * @returns {Object} - saved document.
  */
 
-exports.saveResult = (doc, key, dbUrl) => {
+exports.saveResult = (doc, dbUrl) => {
   const RESULT_DB = nano(dbUrl);
   const cloneDoc = _.clone(doc);
+  let docKey = cloneDoc.indexKeys.ref;
+  delete doc.indexKeys;
+
+  let docObj = {
+    parent_id: cloneDoc.indexKeys.parent_id,
+    result_year: cloneDoc.indexKeys.year,
+    result_month: cloneDoc.indexKeys.month,
+    result_day: cloneDoc.indexKeys.day,
+    processed_results: doc
+  };
 
   return new Promise((resolve, reject) => {
-    RESULT_DB.get(key, (error, existingDoc) => {
-      delete doc.indexKeys;
-      let docObj = {
-        parent_id: cloneDoc.indexKeys.parent_id,
-        result_year: cloneDoc.indexKeys.year,
-        result_month: cloneDoc.indexKeys.month,
-        result_day: cloneDoc.indexKeys.day,
-        processed_results: doc
-      };
+    RESULT_DB.get(docKey, (error, existingDoc) => {
       // if doc exists update it using its revision number.
       if (!error) {
         docObj._rev = existingDoc._rev;
       }
-      RESULT_DB.insert(docObj, key, (err, body) => {
+      RESULT_DB.insert(docObj, docKey, (err, body) => {
         if (err) {
           reject(err);
         }
@@ -298,6 +300,22 @@ exports.getProcessedResults = function (ref, dbUrl) {
         reject(err);
       }
       resolve(body.rows)
+    });
+  });
+}
+
+
+exports.getResults = function(id, dbUrl) {
+  const BASE_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    BASE_DB.view('reporting', 'byTripId', {
+      key: id,
+      include_docs: true
+    }, (err, body) => {
+      if (err) {
+        reject(err);
+      }
+      resolve(body.rows);
     });
   });
 }

@@ -5,12 +5,13 @@
 
 /**
  * Module dependencies.
-*/
+ */
+
 const nano = require('nano');
 const _ = require('lodash');
 
 /**
- * Module dependencies.
+ * Local dependencies.
  */
 
 const processResult = require('./result').generateResult;
@@ -47,17 +48,13 @@ const dbQuery = require('./../utils/dbQuery');
 exports.processResult = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
-  const docId = req.params.id;
-  let tripId;
+  const tripId = req.params.id;
 
-  dbQuery.retrieveDoc(docId, dbUrl)
-    .then((data) => {
-      tripId = data.tripId;
-      return processWorkflowResult(data.workflowId, dbUrl);
-    })
-    .then(async(result) => {
-      const saveResponse = await dbQuery.saveResult(result, tripId, resultDbUrl);
-      res.json(saveResponse);
+  dbQuery.getResults(tripId, dbUrl)
+    .then(async(data) => {
+      const result = processWorkflowResult(data);
+      const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
+      res.json({ saveResponse, result });
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -116,7 +113,7 @@ exports.processAll = (req, res) => {
 /*****************************
  *     APPLICATION MODULE    *
  *****************************
-*/
+ */
 
 
 /**
@@ -127,40 +124,17 @@ exports.processAll = (req, res) => {
  * @returns {Object} - processed result for csv.
  */
 
-const processWorkflowResult = function(docId, dbUrl) {
+const processWorkflowResult = function(data) {
   let workflowResults = {};
+  let docCount = 0;
 
-  return new Promise ((resolve, reject) => {
-    dbQuery.retrieveDoc(docId, dbUrl)
-      .then(async(data) => {
-        let workflowCounts = {
-          assessmentCount: 0,
-          curriculumCount: 0,
-          messageCount: 0
-        };
+  for (item of data) {
+    let assessmentResults = processResult(item, docCount);
+    workflowResults = _.assignIn(workflowResults, assessmentResults);
+    docCount++;
+  }
 
-        for (item of data.children) {
-          if (item.type === 'assessment') {
-            let assessmentResults = await processResult(item.typesId, workflowCounts.assessmentCount, dbUrl);
-            workflowResults = _.assignIn(workflowResults, assessmentResults);
-            workflowCounts.assessmentCount++;
-          }
-          if (item.type === 'curriculum') {
-            let curriculumResults = await processResult(item.typesId, workflowCounts.curriculumCount, dbUrl);
-            workflowResults = _.assignIn(workflowResults, curriculumResults);
-            workflowCounts.curriculumCount++;
-          }
-          if (item.type === 'message') {
-            let messageSuffix = workflowCounts.messageCount > 0 ? `_${workflowCounts.messageCount}` : '';
-            let messageKey = `${docId}.message${messageSuffix}`;
-            workflowResults = _.assignIn(workflowResults, { [messageKey]: item.message });
-            workflowCounts.messageCount++;
-          }
-        }
-        resolve(workflowResults);
-      })
-      .catch((err) => reject(err));
-  });
+  return workflowResults;
 }
 
 exports.processWorkflowResult = processWorkflowResult;

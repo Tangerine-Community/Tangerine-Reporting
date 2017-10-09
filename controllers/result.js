@@ -33,7 +33,7 @@ const gridValueMap = {
 const surveyValueMap = {
   'checked': '1',
   'unchecked': '0',
-  'not asked' : '.',
+  'not asked': '.',
   'skipped': '999',
   'logicSkipped': '999'
 };
@@ -127,15 +127,13 @@ exports.processResult = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
   const docId = req.params.id;
+  const count = 0;
 
-  dbQuery.retrieveDoc(docId, dbUrl)
-    .then((data) => {
-      let collectionId = data.assessmentId || data.curriculumId;
-      return generateResult(collectionId, 0, dbUrl);
-    })
-    .then(async(result) => {
-      const saveResponse = await dbQuery.saveResult(result, docId, resultDbUrl);
-      res.json(saveResponse);
+  dbQuery.getResults(docId, dbUrl)
+    .then(async(data) => {
+      const result = generateResult(data, count);
+      const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
+      res.json({ saveResponse, result });
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -176,7 +174,7 @@ exports.processAll = (req, res) => {
     .then(async(data) => {
       let saveResponse;
 
-      for(item of data) {
+      for (item of data) {
         let docId = item.assessmentId || item.curriculumId;
         let ref = item._id;
         let processedResult = await generateResult(docId, 0, dbUrl);
@@ -191,7 +189,7 @@ exports.processAll = (req, res) => {
 /************************
  *  APPLICATION MODULE  *
  ************************
-*/
+ */
 
 
 /**
@@ -204,108 +202,104 @@ exports.processAll = (req, res) => {
  * @returns {Object} - processed result for csv.
  */
 
-const generateResult = function(docId, count = 0, dbUrl) {
+const generateResult = function(collections, count = 0) {
   let result = {};
+  let indexKeys = {};
+  let assessmentSuffix = count > 0 ? `_${count}` : '';
+  collections = _.isArray(collections) ? collections : [collections];
 
-  return new Promise ((resolve, reject) => {
-    dbQuery.getResultInChunks(docId, dbUrl)
-      .then((collections) => {
-        let assessmentSuffix = count > 0 ? `_${count}` : '';
-        let indexKeys = {};
+  for (let [index, data] of collections.entries()) {
+    if (index === 0) {
+      indexKeys.year = new Date(data.doc.start_time).getFullYear().toString();
+      indexKeys.month = new Date(data.doc.start_time).toLocaleString('en-GB', { month: 'short' });
+      indexKeys.day = new Date(data.doc.start_time).getDay().toString();
+      indexKeys.parent_id = data.doc.workflowId || data.doc.assessmentId;
+      indexKeys.ref = data.doc.workflowId ? data.doc.tripId : data.doc._id;
+      result.indexKeys = indexKeys;
+    }
+    result[`${data.doc.assessmentId}.assessmentId${assessmentSuffix}`] = data.doc.assessmentId;
+    result[`${data.doc.assessmentId}.assessmentName${assessmentSuffix}`] = data.doc.assessmentName;
+    result[`${data.doc.assessmentId}.enumerator${assessmentSuffix}`] = data.doc.enumerator;
+    result[`${data.doc.assessmentId}.start_time${assessmentSuffix}`] = data.doc.start_time;
+    result[`${data.doc.assessmentId}.order_map${assessmentSuffix}`] = data.doc.order_map ? data.doc.order_map.join(',') : '';
 
-        for (data of collections) {
-          if (count === 0) {
-            indexKeys.year  = new Date(data.doc.start_time).getFullYear().toString();
-            indexKeys.month = new Date(data.doc.start_time).toLocaleString('en-GB', { month: 'short' });
-            indexKeys.day   = new Date(data.doc.start_time).getDay().toString();
-            indexKeys.parent_id = data.doc.workflowId || data.doc.assessmentId;
-            result.indexKeys = indexKeys;
-          }
-          result[`${data.doc.assessmentId}.assessmentId${assessmentSuffix}`] = data.doc.assessmentId;
-          result[`${data.doc.assessmentId}.assessmentName${assessmentSuffix}`] = data.doc.assessmentName;
-          result[`${data.doc.assessmentId}.enumerator${assessmentSuffix}`] = data.doc.enumerator;
-          result[`${data.doc.assessmentId}.start_time${assessmentSuffix}`] = data.doc.start_time;
-          result[`${data.doc.assessmentId}.order_map${assessmentSuffix}`] = data.doc.order_map ? data.doc.order_map.join(',') : '';
+    let subtestCounts = {
+      locationCount: 0,
+      datetimeCount: 0,
+      idCount: 0,
+      consentCount: 0,
+      gpsCount: 0,
+      cameraCount: 0,
+      surveyCount: 0,
+      gridCount: 0,
+      timestampCount: 0
+    };
 
-          let subtestCounts = {
-            locationCount: 0,
-            datetimeCount: 0,
-            idCount: 0,
-            consentCount: 0,
-            gpsCount: 0,
-            cameraCount: 0,
-            surveyCount: 0,
-            gridCount: 0,
-            timestampCount: 0
-          };
+    let subtestData = data.doc.subtestData;
+    subtestData = _.isArray(subtestData) ? subtestData : [subtestData];
 
-          let subtestData = data.doc.subtestData;
-          subtestData = _.isArray(subtestData) ? subtestData : [subtestData];
-          for (doc of subtestData) {
-            if (doc.prototype === 'location') {
-              let location = processLocationResult(doc, subtestCounts);
-              result = _.assignIn(result, location);
-              subtestCounts.locationCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'datetime') {
-              let datetime = processDatetimeResult(doc, subtestCounts);
-              result = _.assignIn(result, datetime);
-              subtestCounts.datetimeCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'consent') {
-              let consent = processConsentResult(doc, subtestCounts);
-              result = _.assignIn(result, consent);
-              subtestCounts.consentCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'id') {
-              let id = processIDResult(doc, subtestCounts);
-              result = _.assignIn(result, id);
-              subtestCounts.idCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'survey') {
-              let survey = processSurveyResult(doc, subtestCounts);
-              result = _.assignIn(result, survey);
-              subtestCounts.surveyCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'grid') {
-              let grid = processGridResult(doc, subtestCounts);
-              result = _.assignIn(result, grid);
-              subtestCounts.gridCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'gps') {
-              let gps = processGpsResult(doc, subtestCounts);
-              result = _.assignIn(result, gps);
-              subtestCounts.gpsCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'camera') {
-              let camera = processCamera(doc, subtestCounts);
-              result = _.assignIn(result, camera);
-              subtestCounts.cameraCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'complete') {
-              result[`${data.doc.assessmentId}.end_time${assessmentSuffix}`] = doc.data.end_time;
-            }
-          }
-        }
-        resolve(result);
-      })
-      .catch((err) => reject(err));
-  });
+    for (doc of subtestData) {
+      if (doc.prototype === 'location') {
+        let location = processLocationResult(doc, subtestCounts);
+        result = _.assignIn(result, location);
+        subtestCounts.locationCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'datetime') {
+        let datetime = processDatetimeResult(doc, subtestCounts);
+        result = _.assignIn(result, datetime);
+        subtestCounts.datetimeCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'consent') {
+        let consent = processConsentResult(doc, subtestCounts);
+        result = _.assignIn(result, consent);
+        subtestCounts.consentCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'id') {
+        let id = processIDResult(doc, subtestCounts);
+        result = _.assignIn(result, id);
+        subtestCounts.idCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'survey') {
+        let survey = processSurveyResult(doc, subtestCounts);
+        result = _.assignIn(result, survey);
+        subtestCounts.surveyCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'grid') {
+        let grid = processGridResult(doc, subtestCounts);
+        result = _.assignIn(result, grid);
+        subtestCounts.gridCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'gps') {
+        let gps = processGpsResult(doc, subtestCounts);
+        result = _.assignIn(result, gps);
+        subtestCounts.gpsCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'camera') {
+        let camera = processCamera(doc, subtestCounts);
+        result = _.assignIn(result, camera);
+        subtestCounts.cameraCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'complete') {
+        result[`${data.doc.assessmentId}.end_time${assessmentSuffix}`] = doc.data.end_time;
+      }
+    }
+  }
+  return result;
 }
 
 /**********************************************
  *  HELPER FUNCTIONS FOR PROCESSING RESULTS   *
  *          FOR DIFFERENT PROTOTYPES          *
  **********************************************
-*/
+ */
 
 /**
  * This function processes result for a location prototype.

@@ -43,9 +43,11 @@ const dbConfig = require('./config');
 async function generateAssessmentHeaders(data) {
   let response;
   for (item of data) {
-    let assessmentId = item.doc.assessmentId;
     let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbConfig.base_db);
+    let collection = generatedHeaders.shift();
+    let assessmentId = collection.assessmentId;
     response = await dbQuery.saveHeaders(generatedHeaders, assessmentId, dbConfig.result_db);
+    console.log(response);
   }
   return response;
 }
@@ -167,7 +169,9 @@ tangerine
   .action((id) => {
     createColumnHeaders(id, 0, dbConfig.base_db)
       .then(async(data) => {
-        console.log(await dbQuery.saveHeaders(data, id, dbConfig.result_db));
+        let collection = data.shift();
+        let assessmentId = collection.assessmentId;
+        console.log(await dbQuery.saveHeaders(data, assessmentId, dbConfig.result_db));
         console.log(chalk.green('✓ Successfully generate and save assessment header'));
       })
       .catch((err) => Error(err));
@@ -219,15 +223,11 @@ tangerine
   .command('workflow-result <id>')
   .description('process result for a workflow')
   .action(function(id) {
-    let tripId;
-
-    dbQuery.retrieveDoc(id, dbConfig.base_db)
-      .then((data) => {
-        tripId = data.tripId;
-        return processWorkflowResult(data.workflowId, dbConfig.base_db);
-      })
-      .then(async(result) => {
-        console.log(await dbQuery.saveResult(result, tripId, dbConfig.result_db));
+    dbQuery.getResults(id, dbConfig.base_db)
+      .then(async(data) => {
+        const result = processWorkflowResult(data);
+        const saveResponse = await dbQuery.saveResult(result, dbConfig.result_db);
+        console.log(saveResponse);
         console.log(chalk.green('✓ Successfully process and save workflow result'));
       })
       .catch((err) => Error(err));
@@ -320,6 +320,21 @@ tangerine
       })
       .catch((err) => Error(err));
   });
+
+
+
+tangerine
+  .version('0.1.0')
+  .command('get-result <id>')
+  .description('retrieve a result document from the database')
+  .action(function(id) {
+    dbQuery.getResults(id, dbConfig.base_db)
+      .then((data) => {
+        console.log(data);
+      })
+      .catch((err) => Error(err));
+  });
+
 
 tangerine.parse(process.argv);
 
