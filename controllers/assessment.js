@@ -139,10 +139,11 @@ exports.generateAll = (req, res) => {
     .then(async(data) => {
       let saveResponse;
 
-      for(item of data) {
+      for (item of data) {
         let assessmentId = item.doc.assessmentId;
         let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbUrl);
         saveResponse = await dbQuery.saveHeaders(generatedHeaders, assessmentId, resultDbUrl);
+        console.log(saveResponse);
       }
       res.json(saveResponse);
     })
@@ -224,7 +225,7 @@ const createColumnHeaders = function(docId, count = 0, dbUrl) {
             subtestCounts.surveyCount++;
             subtestCounts.timestampCount++;
           }
-          if (data.prototype === 'grid' && subtestCounts.gridCount == 0) {
+          if (data.prototype === 'grid') {
             let grid = await createGrid(data, subtestCounts, dbUrl);
             assessments = assessments.concat(grid.gridHeader);
             subtestCounts.gridCount++;
@@ -406,61 +407,51 @@ async function createSurvey(id, subtestCounts, dbUrl) {
 async function createGrid(doc, subtestCounts, dbUrl) {
   let count = subtestCounts.gridCount;
   let gridHeader = [];
-  let gridData = [];
-  let docId = doc.assessmentId || doc.curriculumId;
-  let resultDocs = await dbQuery.getResults(docId, dbUrl);
-
-  _.each(resultDocs, (item) => {
-    _.filter(item.doc.subtestData, (value) => {
-      if (value.prototype === 'grid') {
-        gridData.push(value);
-      }
-    });
-  });
+  let gridData = [doc];
+  let suffix = count > 0 ? `_${count}` : '';
 
   for (sub of gridData) {
-    let suffix = count > 0 ? `_${count}` : '';
-    let i; items = sub.data.items;
-    let variableName = sub.data.variable_name || sub.name.toLowerCase().replace(/\s/g, '_');
+    let subtestId = sub._id;
+    let variableName = sub.variableName || sub.name.toLowerCase().replace(/\s/g, '_');
 
     gridHeader.push({
       header: `${variableName}_auto_stop${suffix}`,
-      key: `${sub.subtestId}.${variableName}_auto_stop${suffix}`
+      key: `${subtestId}.${variableName}_auto_stop${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_time_remain${suffix}`,
-      key: `${sub.subtestId}.${variableName}_time_remain${suffix}`
+      key: `${subtestId}.${variableName}_time_remain${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_capture_item_at_time${suffix}`,
-      key: `${sub.subtestId}.${variableName}_capture_item_at_time${suffix}`
+      key: `${subtestId}.${variableName}_capture_item_at_time${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_attempted${suffix}`,
-      key: `${sub.subtestId}.${variableName}_attempted${suffix}`
+      key: `${subtestId}.${variableName}_attempted${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_time_intermediate_captured${suffix}`,
-      key: `${sub.subtestId}.${variableName}_time_intermediate_captured${suffix}`
+      key: `${subtestId}.${variableName}_time_intermediate_captured${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_time_allowed${suffix}`,
-      key: `${sub.subtestId}.${variableName}_time_allowed${suffix}`
+      key: `${subtestId}.${variableName}_time_allowed${suffix}`
     });
 
+    let i; let items = sub.items;
+
     for (i = 0; i < items.length; i++) {
-      let label = items[i].itemLabel;
       gridHeader.push({
-        header: `${variableName}_${label}${suffix}`,
-        key: `${sub.subtestId}.${variableName}_${label}${suffix}`
+        header: `${variableName}_${i}${suffix}`,
+        key: `${subtestId}.${variableName}_${i}${suffix}`
       });
     }
     gridHeader.push({
       header: `timestamp_${subtestCounts.timestampCount}`,
-      key: `${sub.subtestId}.timestamp_${subtestCounts.timestampCount}`
+      key: `${subtestId}.timestamp_${subtestCounts.timestampCount}`
     });
     subtestCounts.timestampCount++;
-    count++;
   }
 
   return { gridHeader, timestampCount: subtestCounts.timestampCount };
