@@ -188,14 +188,14 @@ tangerine
   .description('process result for an assessment')
   .action((id) => {
     dbQuery.retrieveDoc(id, dbConfig.base_db)
-    .then(async(data) => {
-      let resultDoc = { doc: data };
-      const result = processAssessmentResult(resultDoc);
-      const saveResponse = await dbQuery.saveResult(result, dbConfig.result_db);
-      console.log(saveResponse);
-      console.log(chalk.green('✓ Successfully process and save assessment result'));
-    })
-    .catch((err) => Error(err));
+      .then(async(data) => {
+        let resultDoc = { doc: data };
+        const result = processAssessmentResult(resultDoc);
+        const saveResponse = await dbQuery.saveResult(result, dbConfig.result_db);
+        console.log(saveResponse);
+        console.log(chalk.green('✓ Successfully process and save assessment result'));
+      })
+      .catch((err) => Error(err));
   });
 
 /**
@@ -208,9 +208,11 @@ tangerine
   .command('workflow-header <id>')
   .description('generate headers for a workflow')
   .action((id) => {
-    createWorkflowHeaders(id, dbConfig.base_db)
-      .then(async(data) => {
-        console.log(await dbQuery.saveHeaders(data, id, dbConfig.result_db));
+    dbQuery.retrieveDoc(id, dbConfig.base_db)
+      .then(async(doc) => {
+        let colHeaders = await createWorkflowHeaders(doc, dbConfig.base_db);
+        const saveResponse = await dbQuery.saveHeaders(colHeaders, id, dbConfig.result_db);
+        console.log(saveResponse);
         console.log(chalk.green('✓ Successfully generate and save workflow header'));
       })
       .catch((err) => Error(err));

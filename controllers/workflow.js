@@ -56,7 +56,7 @@ const dbQuery = require('./../utils/dbQuery');
 
 exports.all = (req, res) => {
   dbQuery.getAllWorkflow(req.body.base_db)
-    .then((data) => res.json(data))
+    .then((data) => res.json({ count: data.length, workflows: data }))
     .catch((err) => res.json(Error(err)));
 }
 
@@ -91,14 +91,11 @@ exports.all = (req, res) => {
 exports.generateHeader = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
-  let workflowId;
+  const workflowId = req.params.id;
 
-  dbQuery.retrieveDoc(req.params.id, dbUrl)
-    .then((doc) => {
-      workflowId = doc.workflowId;
-      return createWorkflowHeaders(workflowId, dbUrl);
-    })
-    .then(async(colHeaders) => {
+  dbQuery.retrieveDoc(workflowId, dbUrl)
+    .then(async(doc) => {
+      let colHeaders = await createWorkflowHeaders(doc, dbUrl);
       const saveResponse = await dbQuery.saveHeaders(colHeaders, workflowId, resultDbUrl);
       res.json(saveResponse);
     })
@@ -153,7 +150,7 @@ exports.generateAll = (req, res) => {
 /*****************************
  *     APPLICATION MODULE    *
  *****************************
-*/
+ */
 
 
 /**
@@ -165,41 +162,40 @@ exports.generateAll = (req, res) => {
  * @returns {Array} - generated headers for csv.
  */
 
-const createWorkflowHeaders = function(docId, dbUrl) {
+const createWorkflowHeaders = async function(data, dbUrl) {
   let workflowHeaders = [];
+  let workflowCounts = {
+    assessmentCount: 0,
+    curriculumCount: 0,
+    messageCount: 0
+  };
+  let workflowItems = [];
 
-  return new Promise ((resolve, reject) => {
-    dbQuery.retrieveDoc(docId, dbUrl)
-      .then(async(data) => {
-        let workflowCounts = {
-          assessmentCount: 0,
-          curriculumCount: 0,
-          messageCount: 0
-        };
+  for (item of data.children) {
+    if (item.type === 'assessment') {
+      let assessmentHeaders = await createColumnHeaders(item.typesId, workflowCounts.assessmentCount, dbUrl);
+      workflowHeaders.push(assessmentHeaders);
+      workflowCounts.assessmentCount++;
+    }
+    if (item.type === 'curriculum') {
+      let isCurriculumProcessed = _.find(workflowItems, {typesId: item.typesId});
+      // Check if this curriculum has been processed earlier to prevent duplication.
+      if (isCurriculumProcessed === undefined) {
+        let curriculumHeaders = await createColumnHeaders(item.typesId, workflowCounts.curriculumCount, dbUrl);
+        workflowHeaders.push(curriculumHeaders);
+      }
+      workflowCounts.curriculumCount++;
+    }
+    if (item.type === 'message') {
+      let messageSuffix = workflowCounts.messageCount > 0 ? `_${workflowCounts.messageCount}` : '';
+      workflowHeaders.push({ headers: `message${messageSuffix}`, key: `${data._id}.message${messageSuffix}` });
+      workflowCounts.messageCount++;
+    }
+    workflowItems.push(item);
+  }
+  workflowHeaders = _.flatten(workflowHeaders);
 
-        for (item of data.children) {
-          if (item.type === 'assessment') {
-            let assessmentHeaders = await createColumnHeaders(item.typesId, workflowCounts.assessmentCount, dbUrl);
-            workflowHeaders.push(assessmentHeaders);
-            workflowCounts.assessmentCount++;
-          }
-          if (item.type === 'curriculum') {
-            let curriculumHeaders = await createColumnHeaders(item.typesId, workflowCounts.curriculumCount, dbUrl);
-            workflowHeaders.push(curriculumHeaders);
-            workflowCounts.curriculumCount++;
-          }
-          if (item.type === 'message') {
-            let messageSuffix = workflowCounts.messageCount > 0 ? `_${workflowCounts.messageCount}` : '';
-            workflowHeaders.push({ headers: `message${messageSuffix}`, key: `${docId}.message${messageSuffix}`});
-            workflowCounts.messageCount++;
-          }
-        }
-        workflowHeaders = _.flatten(workflowHeaders);
-
-        resolve(workflowHeaders);
-      })
-      .catch((err) => reject(err));
-  });
+  return workflowHeaders;
 }
 
 exports.createWorkflowHeaders = createWorkflowHeaders;

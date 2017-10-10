@@ -174,7 +174,6 @@ const createColumnHeaders = function(docId, count = 0, dbUrl) {
       .then((item) => {
         if (item.assessmentId) {
           let assessmentSuffix = count > 0 ? `_${count}` : '';
-          assessments.push({ assessmentId: item.assessmentId });
           assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${item.assessmentId}.assessmentId${assessmentSuffix}` });
           assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${item.assessmentId}.assessmentName${assessmentSuffix}` });
           assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${item.assessmentId}.enumerator${assessmentSuffix}` });
@@ -232,6 +231,7 @@ const createColumnHeaders = function(docId, count = 0, dbUrl) {
             assessments = assessments.concat(grid.gridHeader);
             subtestCounts.gridCount++;
             subtestCounts.timestampCount = grid.timestampCount;
+            break;
           }
           if (data.prototype === 'gps') {
             let gps = createGps(data, subtestCounts);
@@ -410,9 +410,8 @@ async function createGrid(doc, subtestCounts, dbUrl) {
   let count = subtestCounts.gridCount;
   let gridHeader = [];
   let gridData = [];
-  let suffix = count > 0 ? `_${count}` : '';
   let docId = doc.assessmentId || doc.curriculumId;
-  let resultDocs = await dbQuery.getResultInChunks(docId, dbUrl);
+  let resultDocs = await dbQuery.getResults(docId, dbUrl);
 
   _.each(resultDocs, (item) => {
     _.filter(item.doc.subtestData, (value) => {
@@ -423,6 +422,7 @@ async function createGrid(doc, subtestCounts, dbUrl) {
   });
 
   for (sub of gridData) {
+    let suffix = count > 0 ? `_${count}` : '';
     let i; items = sub.data.items;
     let variableName = sub.data.variable_name || sub.name.toLowerCase().replace(/\s/g, '_');
 
@@ -463,6 +463,7 @@ async function createGrid(doc, subtestCounts, dbUrl) {
       key: `${sub.subtestId}.timestamp_${subtestCounts.timestampCount}`
     });
     subtestCounts.timestampCount++;
+    count++;
   }
 
   return { gridHeader, timestampCount: subtestCounts.timestampCount };
