@@ -94,14 +94,12 @@ exports.all = (req, res) => {
 exports.generateHeader = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
-  const docId = req.params.id;
+  const assessmentId = req.params.id;
 
-  createColumnHeaders(docId, 0, dbUrl)
+  createColumnHeaders(assessmentId, 0, dbUrl)
     .then(async(colHeaders) => {
-      let collection = colHeaders.shift();
-      let assessmentId = collection.assessmentId;
       const saveResponse = await dbQuery.saveHeaders(colHeaders, assessmentId, resultDbUrl);
-      res.json({ saveResponse, colHeaders });
+      res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -226,12 +224,11 @@ const createColumnHeaders = function(docId, count = 0, dbUrl) {
             subtestCounts.surveyCount++;
             subtestCounts.timestampCount++;
           }
-          if (data.prototype === 'grid') {
+          if (data.prototype === 'grid' && subtestCounts.gridCount == 0) {
             let grid = await createGrid(data, subtestCounts, dbUrl);
             assessments = assessments.concat(grid.gridHeader);
             subtestCounts.gridCount++;
             subtestCounts.timestampCount = grid.timestampCount;
-            break;
           }
           if (data.prototype === 'gps') {
             let gps = createGps(data, subtestCounts);
@@ -415,7 +412,7 @@ async function createGrid(doc, subtestCounts, dbUrl) {
 
   _.each(resultDocs, (item) => {
     _.filter(item.doc.subtestData, (value) => {
-      if(value.prototype === 'grid') {
+      if (value.prototype === 'grid') {
         gridData.push(value);
       }
     });
