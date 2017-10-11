@@ -231,7 +231,7 @@ exports.getQuestionBySubtestId = (subtestId, dbUrl) => {
 exports.getProcessedResults = function (ref, dbUrl) {
   const RESULT_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
-    RESULT_DB.view('reporting', 'byParentId', {
+    RESULT_DB.view('dashReporting', 'byParentId', {
       key: ref,
       include_docs: true
     }, (err, body) => {

@@ -58,7 +58,7 @@ app.post('/workflow/headers/:id', workflowController.generateHeader);
 app.post('/workflow/result/all', tripController.processAll);
 app.post('/workflow/result/:id', tripController.processResult);
 
-app.post('/generate_csv', csvController.generate);
+app.post('/generate_csv/:id', csvController.generate);
 app.post('/tangerine_changes', changesController.changes);
 
 /**
