@@ -54,7 +54,7 @@ exports.processResult = (req, res) => {
     .then(async(data) => {
       const result = processWorkflowResult(data);
       const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
-      res.json({ saveResponse, result });
+      res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -94,14 +94,16 @@ exports.processAll = (req, res) => {
     .then(async(data) => {
       let saveResponse;
       for (item of data) {
-        let workflowId = item.workflowId;
-        if (!workflowId) {
+        let resultDoc = [{ doc: item }];
+        if (!item.tripId) {
           let docId = item.assessmentId || item.curriculumId;
-          let assessmentResults = await processResult(docId, 0, dbUrl);
-          saveResponse = await dbQuery.saveResult(assessmentResults, item._id, resultDbUrl);
+          let assessmentResults = await processResult(resultDoc);
+          saveResponse = await dbQuery.saveResult(assessmentResults, resultDbUrl);
+          console.log(saveResponse);
         } else {
-          let processedResult = await processWorkflowResult(workflowId, dbUrl);
-          saveResponse = await dbQuery.saveResult(processedResult, item.tripId, resultDbUrl);
+          let processedResult = await processWorkflowResult(resultDoc);
+          saveResponse = await dbQuery.saveResult(processedResult, resultDbUrl);
+          console.log(saveResponse);
         }
       }
       res.json(saveResponse);
@@ -129,8 +131,8 @@ const processWorkflowResult = function(data) {
   let docCount = 0;
 
   for (item of data) {
-    let assessmentResults = processResult(item, docCount);
-    workflowResults = _.assignIn(workflowResults, assessmentResults);
+    let processedResult = processResult(item, docCount);
+    workflowResults = _.assignIn(workflowResults, processedResult);
     docCount++;
   }
 

@@ -133,7 +133,7 @@ exports.processResult = (req, res) => {
       let resultDoc = { doc: data };
       const result = generateResult(resultDoc);
       const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
-      res.json({ saveResponse, result });
+      res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
 }

@@ -138,8 +138,9 @@ exports.generateAll = (req, res) => {
       let saveResponse;
       for (item of data) {
         let workflowId = item.id;
-        let generatedWorkflowHeaders = await createWorkflowHeaders(workflowId, dbUrl);
+        let generatedWorkflowHeaders = await createWorkflowHeaders(item.doc, dbUrl);
         saveResponse = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
+        console.log(saveResponse);
       }
       res.json(saveResponse);
     })
@@ -178,9 +179,9 @@ const createWorkflowHeaders = async function(data, dbUrl) {
       workflowCounts.assessmentCount++;
     }
     if (item.type === 'curriculum') {
-      let isCurriculumProcessed = _.find(workflowItems, {typesId: item.typesId});
       // Check if this curriculum has been processed earlier to prevent duplication.
-      if (isCurriculumProcessed === undefined) {
+      let isCurriculumProcessed = _.find(workflowItems, {typesId: item.typesId});
+      if (!isCurriculumProcessed) {
         let curriculumHeaders = await createColumnHeaders(item.typesId, workflowCounts.curriculumCount, dbUrl);
         workflowHeaders.push(curriculumHeaders);
       }

@@ -412,7 +412,13 @@ async function createGrid(doc, subtestCounts, dbUrl) {
 
   for (sub of gridData) {
     let subtestId = sub._id;
-    let variableName = sub.variableName || sub.name.toLowerCase().replace(/\s/g, '_');
+    let variableName = sub.variableName;
+    variableName = variableName ? variableName : sub.name && sub.name.toLowerCase().replace(/\s/g, '_');
+
+    // if no variable name break out of loop
+    if (!variableName) {
+      break;
+    }
 
     gridHeader.push({
       header: `${variableName}_auto_stop${suffix}`,
