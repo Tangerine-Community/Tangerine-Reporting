@@ -29,7 +29,7 @@ const dbConfig = require('./config');
  *  HELPER FUNCTIONS FOR GENERATING AND   *
  *      SAVING HEADERS AND RESULTS        *
  ******************************************
-*/
+ */
 
 
 /**
@@ -43,9 +43,8 @@ const dbConfig = require('./config');
 async function generateAssessmentHeaders(data) {
   let response;
   for (item of data) {
-    let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbConfig.base_db);
-    let collection = generatedHeaders.shift();
-    let assessmentId = collection.assessmentId;
+    let assessmentId = item.doc.assessmentId;
+    let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbUrl);
     response = await dbQuery.saveHeaders(generatedHeaders, assessmentId, dbConfig.result_db);
     console.log(response);
   }
@@ -63,9 +62,10 @@ async function generateAssessmentHeaders(data) {
 async function generateworkflowHeaders(data) {
   let response;
   for (item of data) {
-    let assessmentId = item.doc.assessmentId;
-    let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbConfig.base_db);
-    response = await dbQuery.saveHeaders(generatedHeaders, assessmentId, dbConfig.result_db);
+    let workflowId = item.id;
+    let generatedWorkflowHeaders = await createWorkflowHeaders(item.doc, dbConfig.base_db);
+    response = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, dbConfig.result_db);
+    console.log(response);
   }
   return response;
 }
@@ -85,6 +85,7 @@ async function generateAssessmentResult(data) {
     let ref = item._id;
     let processedResult = await processAssessmentResult(docId, 0, dbConfig.base_db);
     response = await dbQuery.saveResult(processedResult, ref, dbConfig.result_db);
+    console.log(response);
   }
   return response;
 }
@@ -100,14 +101,16 @@ async function generateAssessmentResult(data) {
 async function generateWorkflowResult(data) {
   let response;
   for (item of data) {
-    let workflowId = item.workflowId;
-    if (!workflowId) {
+    let resultDoc = [{ doc: item }];
+    if (!item.tripId) {
       let docId = item.assessmentId || item.curriculumId;
-      let assessmentResults = await processAssessmentResult(docId, 0, dbConfig.base_db);
-      response = await dbQuery.saveResult(assessmentResults, item._id, dbConfig.result_db);
+      let assessmentResults = await processResult(resultDoc);
+      response = await dbQuery.saveResult(assessmentResults, resultDbUrl);
+      console.log(response);
     } else {
-      let processedResult = await processWorkflowResult(workflowId, dbUrl);
-      response = await dbQuery.saveResult(processedResult, item.tripId, dbConfig.result_db);
+      let processedResult = await processWorkflowResult(resultDoc);
+      response = await dbQuery.saveResult(processedResult, resultDbUrl);
+      console.log(response);
     }
   }
   return response;
@@ -116,7 +119,7 @@ async function generateWorkflowResult(data) {
 /**********************
  *  CLI APPLICATION   *
  **********************
-*/
+ */
 
 /**
  * This part is executed when the command `tangerine-reporting assessments` is run.
@@ -169,9 +172,7 @@ tangerine
   .action((id) => {
     createColumnHeaders(id, 0, dbConfig.base_db)
       .then(async(data) => {
-        let collection = data.shift();
-        let assessmentId = collection.assessmentId;
-        console.log(await dbQuery.saveHeaders(data, assessmentId, dbConfig.result_db));
+        console.log(await dbQuery.saveHeaders(data, id, dbConfig.result_db));
         console.log(chalk.green('✓ Successfully generate and save assessment header'));
       })
       .catch((err) => Error(err));
@@ -258,31 +259,31 @@ tangerine
     }
     if (options.A) {
       dbQuery.getAllAssessment(dbConfig.base_db)
-      .then(async(data) => {
-        await generateAssessmentHeaders(data);
-        console.log(chalk.green('✓ Successfully generate and save all assessment headers'));
-      }).catch((err) => Error(err));
+        .then(async(data) => {
+          await generateAssessmentHeaders(data);
+          console.log(chalk.green('✓ Successfully generate and save all assessment headers'));
+        }).catch((err) => Error(err));
     }
     if (options.W) {
       dbQuery.getAllWorkflow(dbConfig.base_db)
-      .then(async(data) => {
-        await generateworkflowHeaders(data);
-        console.log(chalk.green('✓ Successfully generate and save all workflow headers'));
-      }).catch((err) => Error(err));
+        .then(async(data) => {
+          await generateworkflowHeaders(data);
+          console.log(chalk.green('✓ Successfully generate and save all workflow headers'));
+        }).catch((err) => Error(err));
     }
-    if (options.R)  {
+    if (options.R) {
       dbQuery.getAllResult(dbConfig.base_db)
-      .then(async(data) => {
-        await generateAssessmentResult(data);
-        console.log(chalk.green('✓ Successfully processe and save all assessment results'));
-      }).catch((err) => Error(err));
+        .then(async(data) => {
+          await generateAssessmentResult(data);
+          console.log(chalk.green('✓ Successfully processe and save all assessment results'));
+        }).catch((err) => Error(err));
     }
     if (options.T) {
       dbQuery.getAllWorkflow(dbConfig.base_db)
-      .then(async(data) => {
-        await generateWorkflowResult(data);
-        console.log(chalk.green('✓ Successfully generate and save all workflow results'));
-      }).catch((err) => Error(err));
+        .then(async(data) => {
+          await generateWorkflowResult(data);
+          console.log(chalk.green('✓ Successfully generate and save all workflow results'));
+        }).catch((err) => Error(err));
     }
   }).on('--help', function() {
     console.log(chalk.blue('\n Examples: \n'));

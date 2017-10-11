@@ -220,67 +220,6 @@ exports.getQuestionBySubtestId = (subtestId, dbUrl) => {
 }
 
 /**
- * This function retrieves result document in batches
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} - result documents.
- */
-
-exports.getResultInChunks = async(docId, dbUrl) => {
-  let queryLimit = 10000;
-  let firstResult = await getResultById(docId, dbUrl, queryLimit);
-  let lastPage = Math.floor(firstResult.totalRows / queryLimit) + 1;
-
-  if (firstResult.resultCollection.length === 0) {
-    let count = 0;
-    let view = (firstResult.offset / queryLimit) + 1;
-    let skip = queryLimit * view;
-
-    for (count; count <= lastPage; count++) {
-      skip = queryLimit + skip;
-      let nextResult = await getResultById(docId, dbUrl, queryLimit, skip);
-      if (nextResult.resultCollection.length  > 0) {
-        return nextResult.resultCollection;
-        break;
-      }
-    }
-  } else {
-    return firstResult.resultCollection;
-  }
-}
-
-
-/**
- * This function retrieves a result document.
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- * @param {number} queryLimit - number of documents to be retrieved.
- * @param {number} skip - number of documents to be skipped.
- *
- * @returns {Object} - result documents.
- */
-
-function getResultById (docId, dbUrl, queryLimit = 0, skip = 0) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', {
-      limit: queryLimit,
-      skip: skip,
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      let resultCollection = _.filter(body.rows, (data) => data.doc.assessmentId === docId);
-      resolve({ offset: body.offset, totalRows: body.total_rows, resultCollection });
-    });
-  })
-}
-
-/**
  * This function retrieves all processed result for a given document id
  *
  * @param {string} ref - id of document.
@@ -304,11 +243,19 @@ exports.getProcessedResults = function (ref, dbUrl) {
   });
 }
 
+/**
+ * This function retrieves a result document.
+ *
+ * @param {string} id - trip id of document.
+ * @param {string} dbUrl - database url.
+ *
+ * @returns {Array} - result documents.
+ */
 
 exports.getResults = function(id, dbUrl) {
   const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
-    BASE_DB.view('reporting', 'byTripId', {
+    BASE_DB.view('dashReporting', 'byTripId', {
       key: id,
       include_docs: true
     }, (err, body) => {
