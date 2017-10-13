@@ -2,16 +2,21 @@
  * This file processes the result of an assessment.
  * The processed result will serve as the values for CSV generation.
  *
- * Modules: generateResult, saveResult, getResultInChunks.
+ * Module: generateResult.
  */
 
 /**
- * Module dependencies
+ * Module dependencies.
  */
 
 const _ = require('lodash');
-const Excel = require('exceljs');
 const nano = require('nano');
+
+/**
+ * Local dependencies.
+ */
+
+const dbQuery = require('./../utils/dbQuery');
 
 /**
  * Define value maps for grid and survey values.
@@ -28,7 +33,7 @@ const gridValueMap = {
 const surveyValueMap = {
   'checked': '1',
   'unchecked': '0',
-  'not asked' : '.',
+  'not asked': '.',
   'skipped': '999',
   'logicSkipped': '999'
 };
@@ -82,9 +87,9 @@ const surveyValueMap = {
  */
 
 exports.all = (req, res) => {
-  getAllResult(req.body.base_db)
+  dbQuery.getAllResult(req.body.base_db)
     .then((data) => res.json(data))
-    .catch((err) => res.json(Error(err)))
+    .catch((err) => res.json(Error(err)));
 }
 
 /**
@@ -123,13 +128,11 @@ exports.processResult = (req, res) => {
   const resultDbUrl = req.body.result_db;
   const docId = req.params.id;
 
-  retrieveDoc(docId, dbUrl)
-    .then((data) => {
-      let collectionId = data.assessmentId || data.curriculumId;
-      return generateResult(collectionId, 0, dbUrl);
-    })
-    .then(async(result) => {
-      const saveResponse = await saveResult(result, docId, resultDbUrl);
+  dbQuery.retrieveDoc(docId, dbUrl)
+    .then(async(data) => {
+      let resultDoc = { doc: data };
+      const result = generateResult(resultDoc);
+      const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -167,15 +170,15 @@ exports.processAll = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
 
-  getAllResult(dbUrl)
+  dbQuery.getAllResult(dbUrl)
     .then(async(data) => {
       let saveResponse;
 
-      for(item of data) {
+      for (item of data) {
         let docId = item.assessmentId || item.curriculumId;
         let ref = item._id;
         let processedResult = await generateResult(docId, 0, dbUrl);
-        saveResponse = await saveResult(processedResult, ref, resultDbUrl);
+        saveResponse = await dbQuery.saveResult(processedResult, ref, resultDbUrl);
       }
       res.json(saveResponse);
     })
@@ -186,249 +189,118 @@ exports.processAll = (req, res) => {
 /************************
  *  APPLICATION MODULE  *
  ************************
-*/
+ */
 
 
 /**
  * This function processes the result for an assessment.
+ *
  * @param {string} docId - assessment id.
  * @param {number} count - count
  * @param {string} dbUrl - database url.
+ *
  * @returns {Object} - processed result for csv.
  */
 
-const generateResult = function(docId, count = 0, dbUrl) {
+const generateResult = function(collections, count = 0) {
   let result = {};
+  let indexKeys = {};
+  let assessmentSuffix = count > 0 ? `_${count}` : '';
+  collections = _.isArray(collections) ? collections : [collections];
 
-  return new Promise ((resolve, reject) => {
-    getResultInChunks(docId, dbUrl)
-      .then((collections) => {
-        let assessmentSuffix = count > 0 ? `_${count}` : '';
+  for (let [index, data] of collections.entries()) {
+    let collection = data.doc;
+    let collectionId = collection.workflowId || collection.assessmentId || collection.curriculumId;
+    if (index === 0) {
+      indexKeys.year = new Date(collection.start_time).getFullYear().toString();
+      indexKeys.month = new Date(collection.start_time).toLocaleString('en-GB', { month: 'short' });
+      indexKeys.day = new Date(collection.start_time).getDay().toString();
+      indexKeys.parent_id = collectionId;
+      indexKeys.ref = collection.workflowId ? collection.tripId : collection._id;
+      result.indexKeys = indexKeys;
+    }
+    result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
+    result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
+    result[`${collectionId}.enumerator${assessmentSuffix}`] = collection.enumerator;
+    result[`${collectionId}.start_time${assessmentSuffix}`] = collection.start_time;
+    result[`${collectionId}.order_map${assessmentSuffix}`] = collection.order_map ? collection.order_map.join(',') : '';
 
-        for (data of collections) {
-          result[`${data.doc.assessmentId}.assessmentId${assessmentSuffix}`] = data.doc.assessmentId;
-          result[`${data.doc.assessmentId}.assessmentName${assessmentSuffix}`] = data.doc.assessmentName;
-          result[`${data.doc.assessmentId}.enumerator${assessmentSuffix}`] = data.doc.enumerator;
-          result[`${data.doc.assessmentId}.start_time${assessmentSuffix}`] = data.doc.start_time;
-          result[`${data.doc.assessmentId}.order_map${assessmentSuffix}`] = data.doc.order_map ? data.doc.order_map.join(',') : '';
+    let subtestCounts = {
+      locationCount: 0,
+      datetimeCount: 0,
+      idCount: 0,
+      consentCount: 0,
+      gpsCount: 0,
+      cameraCount: 0,
+      surveyCount: 0,
+      gridCount: 0,
+      timestampCount: 0
+    };
 
-          let subtestCounts = {
-            locationCount: 0,
-            datetimeCount: 0,
-            idCount: 0,
-            consentCount: 0,
-            gpsCount: 0,
-            cameraCount: 0,
-            surveyCount: 0,
-            gridCount: 0,
-            timestampCount: 0
-          };
+    let subtestData = _.isArray(collection.subtestData) ? collection.subtestData : [collection.subtestData];
 
-          for (doc of data.doc.subtestData) {
-            if (doc.prototype === 'location') {
-              let location = processLocationResult(doc, subtestCounts);
-              result = _.assignIn(result, location);
-              subtestCounts.locationCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'datetime') {
-              let datetime = processDatetimeResult(doc, subtestCounts);
-              result = _.assignIn(result, datetime);
-              subtestCounts.datetimeCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'consent') {
-              let consent = processConsentResult(doc, subtestCounts);
-              result = _.assignIn(result, consent);
-              subtestCounts.consentCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'id') {
-              let id = processIDResult(doc, subtestCounts);
-              result = _.assignIn(result, id);
-              subtestCounts.idCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'survey') {
-              let survey = processSurveyResult(doc, subtestCounts);
-              result = _.assignIn(result, survey);
-              subtestCounts.surveyCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'grid') {
-              let grid = processGridResult(doc, subtestCounts);
-              result = _.assignIn(result, grid);
-              subtestCounts.gridCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'gps') {
-              let gps = processGpsResult(doc, subtestCounts);
-              result = _.assignIn(result, gps);
-              subtestCounts.gpsCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'camera') {
-              let camera = processCamera(doc, subtestCounts);
-              result = _.assignIn(result, camera);
-              subtestCounts.cameraCount++;
-              subtestCounts.timestampCount++;
-            }
-            if (doc.prototype === 'complete') {
-              result[`${data.doc.assessmentId}.end_time${assessmentSuffix}`] = doc.data.end_time;
-            }
-          }
-        }
-        resolve(result);
-      })
-      .catch((err) => reject(err));
-  });
-}
-
-
-/********************************************
- *    HELPER FUNCTIONS FOR DATABASE QUERY   *
- ********************************************
-*/
-
-
-/**
- * This function retrieves all result collection in the database.
- *
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} – all result documents.
- */
-
-const getAllResult = function(dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', {
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
+    for (doc of subtestData) {
+      if (doc.prototype === 'location') {
+        let location = processLocationResult(doc, subtestCounts);
+        result = _.assignIn(result, location);
+        subtestCounts.locationCount++;
+        subtestCounts.timestampCount++;
       }
-      let resultCollection = _.map(body.rows, (data) => data.doc);
-      resolve(resultCollection);
-    });
-  });
-}
-
-/**
- * This function retrieves a document from the database.
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Object} - retrieved document.
- */
-
-function retrieveDoc(docId, dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise ((resolve, reject) => {
-    BASE_DB.get(docId, (err, body) => {
-      if (err) {
-        reject(err);
+      if (doc.prototype === 'datetime') {
+        let datetime = processDatetimeResult(doc, subtestCounts);
+        result = _.assignIn(result, datetime);
+        subtestCounts.datetimeCount++;
+        subtestCounts.timestampCount++;
       }
-      resolve(body)
-    });
-  });
-}
-
-/**
- * This function saves/updates a document in the database.
- *
- * @param {Array} doc - document to be saved.
- * @param {string} key - key for indexing.
- * @param {string} dbUrl - url of the result database.
- *
- * @returns {Object} - saved document.
- */
-
-const saveResult = function(doc, key, dbUrl) {
-  const RESULT_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    RESULT_DB.get(key, (error, existingDoc) => {
-      let docObj = { processed_results: doc };
-      // if doc exists update it using its revision number.
-      if (!error) {
-        docObj._rev = existingDoc._rev;
+      if (doc.prototype === 'consent') {
+        let consent = processConsentResult(doc, subtestCounts);
+        result = _.assignIn(result, consent);
+        subtestCounts.consentCount++;
+        subtestCounts.timestampCount++;
       }
-      RESULT_DB.insert(docObj, key, (err, body) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(body);
-      })
-    });
-  });
-}
-
-/**
- * This function retrieves a result document.
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- * @param {number} queryLimit - number of documents to be retrieved.
- * @param {number} skip - number of documents to be skipped.
- *
- * @returns {Object} - result documents.
- */
-
-function getResultById(docId, dbUrl, queryLimit = 0, skip = 0) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'csvRows', {
-      limit: queryLimit,
-      skip: skip,
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
+      if (doc.prototype === 'id') {
+        let id = processIDResult(doc, subtestCounts);
+        result = _.assignIn(result, id);
+        subtestCounts.idCount++;
+        subtestCounts.timestampCount++;
       }
-      let resultCollection = _.filter(body.rows, (data) => data.doc.assessmentId === docId);
-      resolve({ offset: body.offset, totalRows: body.total_rows, resultCollection });
-    });
-  })
-}
-
-/**
- * This function retrieves result document in batches
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} - result documents.
- */
-
-async function getResultInChunks(docId, dbUrl) {
-  let queryLimit = 1000;
-  let firstResult = await getResultById(docId, dbUrl, queryLimit);
-  let lastPage = Math.floor(firstResult.totalRows / queryLimit) + (firstResult.totalRows % queryLimit);
-
-  if (firstResult.resultCollection.length === 0) {
-    let count = 0;
-    let view = (firstResult.offset / queryLimit) + 1;
-    let skip = queryLimit * view;
-
-    for (count; count <= lastPage; count++) {
-      skip = queryLimit + skip;
-      let nextResult = await getResultById(docId, dbUrl, queryLimit, skip);
-      if (nextResult.resultCollection.length  > 0) {
-        return nextResult.resultCollection;
-        break;
+      if (doc.prototype === 'survey') {
+        let survey = processSurveyResult(doc, subtestCounts);
+        result = _.assignIn(result, survey);
+        subtestCounts.surveyCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'grid') {
+        let grid = processGridResult(doc, subtestCounts);
+        result = _.assignIn(result, grid);
+        subtestCounts.gridCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'gps') {
+        let gps = processGpsResult(doc, subtestCounts);
+        result = _.assignIn(result, gps);
+        subtestCounts.gpsCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'camera') {
+        let camera = processCamera(doc, subtestCounts);
+        result = _.assignIn(result, camera);
+        subtestCounts.cameraCount++;
+        subtestCounts.timestampCount++;
+      }
+      if (doc.prototype === 'complete') {
+        result[`${collectionId}.end_time${assessmentSuffix}`] = doc.data.end_time;
       }
     }
-  } else {
-    return firstResult.resultCollection;
   }
+  return result;
 }
 
 /**********************************************
  *  HELPER FUNCTIONS FOR PROCESSING RESULTS   *
  *          FOR DIFFERENT PROTOTYPES          *
  **********************************************
-*/
+ */
 
 /**
  * This function processes result for a location prototype.
@@ -658,7 +530,3 @@ function translateGridValue(databaseValue) {
 };
 
 exports.generateResult = generateResult;
-
-exports.saveResult = saveResult;
-
-exports.getResultInChunks = getResultInChunks;

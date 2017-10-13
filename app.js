@@ -11,6 +11,7 @@ const bodyParser = require('body-parser');
 const logger = require('morgan');
 const chalk = require('chalk');
 const errorHandler = require('errorhandler');
+const nano = require('nano');
 
 /**
  * Create Express Server.
@@ -57,8 +58,28 @@ app.post('/workflow/headers/:id', workflowController.generateHeader);
 app.post('/workflow/result/all', tripController.processAll);
 app.post('/workflow/result/:id', tripController.processResult);
 
-app.post('/generate_csv', csvController.generate);
+app.post('/generate_csv/:id', csvController.generate);
 app.post('/tangerine_changes', changesController.changes);
+
+/**
+ * Hook processing function to couchDB changes feed.
+ */
+
+const dbConfig = require('./config');
+const processChangedDocument = require('./controllers/changes').processChangedDocument;
+
+const BASE_DB = nano(dbConfig.base_db);
+const feed = BASE_DB.follow({ since: 'now', include_docs: true });
+
+feed.on('change', async(resp) => {
+  feed.pause();
+  processChangedDocument(resp, dbConfig.base_db, dbConfig.result_db);
+  setTimeout(function() { feed.resume() }, 500);
+});
+
+feed.on('error', (err) => Error(err));
+feed.follow();
+
 
 /**
  * Error Handler.

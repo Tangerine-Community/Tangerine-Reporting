@@ -26,6 +26,7 @@
   "dependencies": {
     "body-parser": "^1.17.2",
     "chalk": "^2.0.1",
+    "commander": "^2.11.0",
     "errorhandler": "^1.5.0",
     "exceljs": "^0.4.14",
     "express": "^4.15.3",
@@ -38,5 +39,8 @@
     "chai": "^3.5.0",
     "mocha": "^3.4.2",
     "nodemon": "^1.11.0"
+  },
+  "bin": {
+    "tangerine-reporting": "./cli.js"
   }
 }

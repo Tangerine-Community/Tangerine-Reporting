@@ -2,7 +2,7 @@
  * This file creates headers or metadata from an assessment.
  * These headers or metadata will serve as column headers for CSV generation.
  *
- * Modules: createColumnHeaders, saveHeaders.
+ * Module: createColumnHeaders.
  */
 
 /**
@@ -17,7 +17,7 @@ const nano = require('nano');
  * Local dependency.
  */
 
-const getResultInChunks = require('./result').getResultInChunks;
+const dbQuery = require('./../utils/dbQuery');
 
 /**
  * Retrieves all assessment collection in the database.
@@ -57,9 +57,9 @@ const getResultInChunks = require('./result').getResultInChunks;
  */
 
 exports.all = (req, res) => {
-  getAllAssessment(req.body.base_db)
-    .then((data) => res.json(data))
-    .catch((err) => res.send(Error(err)))
+  dbQuery.getAllAssessment(req.body.base_db)
+    .then((data) => res.json({ count: data.length, assessments: data }))
+    .catch((err) => res.send(Error(err)));
 }
 
 /**
@@ -69,7 +69,7 @@ exports.all = (req, res) => {
  *
  *    POST /assessment/headers/:id
  *
- *  where id refers to the id of the assessment document.
+ *  where id refers to the id of the assessment document i.e. '_id' in couchDB.
  *
  *  The request object must contain the main database url and a
  *  result database url where the generated header will be saved.
@@ -97,8 +97,8 @@ exports.generateHeader = (req, res) => {
   const assessmentId = req.params.id;
 
   createColumnHeaders(assessmentId, 0, dbUrl)
-    .then(async(result) => {
-      const saveResponse = await saveHeaders(result, assessmentId, resultDbUrl);
+    .then(async(colHeaders) => {
+      const saveResponse = await dbQuery.saveHeaders(colHeaders, assessmentId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -135,18 +135,19 @@ exports.generateAll = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
 
-  getAllAssessment(dbUrl)
+  dbQuery.getAllAssessment(dbUrl)
     .then(async(data) => {
       let saveResponse;
 
-      for(item of data) {
+      for (item of data) {
         let assessmentId = item.doc.assessmentId;
         let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbUrl);
-        saveResponse = await saveHeaders(generatedHeaders, assessmentId, resultDbUrl);
+        saveResponse = await dbQuery.saveHeaders(generatedHeaders, assessmentId, resultDbUrl);
+        console.log(saveResponse);
       }
       res.json(saveResponse);
     })
-    .catch((err) => res.send(Error(err)))
+    .catch((err) => res.send(Error(err)));
 }
 
 /*****************************
@@ -164,21 +165,19 @@ exports.generateAll = (req, res) => {
  * @returns {Object} processed headers for csv.
  */
 
-const createColumnHeaders = function(docId, count = 0, dbUrl) {
+const createColumnHeaders = function(assessmentId, count = 0, dbUrl) {
   let assessments = [];
 
   return new Promise((resolve, reject) => {
-    getAssessment(docId, dbUrl)
+    dbQuery.retrieveDoc(assessmentId, dbUrl)
       .then((item) => {
-        if (item.assessmentId) {
-          let assessmentSuffix = count > 0 ? `_${count}` : '';
-          assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${item.assessmentId}.assessmentId${assessmentSuffix}` });
-          assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${item.assessmentId}.assessmentName${assessmentSuffix}` });
-          assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${item.assessmentId}.enumerator${assessmentSuffix}` });
-          assessments.push({ header: `start_time${assessmentSuffix}`, key: `${item.assessmentId}.start_time${assessmentSuffix}` });
-          assessments.push({ header: `order_map${assessmentSuffix}`, key: `${item.assessmentId}.order_map${assessmentSuffix}` });
-        }
-        return getSubtests(docId, dbUrl);
+        let assessmentSuffix = count > 0 ? `_${count}` : '';
+        assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${assessmentId}.assessmentId${assessmentSuffix}` });
+        assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${assessmentId}.assessmentName${assessmentSuffix}` });
+        assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${assessmentId}.enumerator${assessmentSuffix}` });
+        assessments.push({ header: `start_time${assessmentSuffix}`, key: `${assessmentId}.start_time${assessmentSuffix}` });
+        assessments.push({ header: `order_map${assessmentSuffix}`, key: `${assessmentId}.order_map${assessmentSuffix}` });
+        return dbQuery.getSubtests(assessmentId, dbUrl);
       })
       .then(async(subtestData) => {
         let subtestCounts = {
@@ -244,142 +243,13 @@ const createColumnHeaders = function(docId, count = 0, dbUrl) {
           }
         }
         let assessmentSuffix = count > 0 ? `_${count}` : '';
-        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docId}.end_time${assessmentSuffix}` });
+        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${assessmentId}.end_time${assessmentSuffix}` });
 
         resolve(assessments);
       })
       .catch((err) => reject(err));
   });
 
-}
-
-/********************************************
- *    HELPER FUNCTIONS FOR DATABASE QUERY   *
- ********************************************
-*/
-
-/**
- * This function retrieves all assessment collections in the database.
- *
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} – all assessment documents.
- */
-
-const getAllAssessment = function(dbUrl) {
-  let BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'byCollection', {
-      key: 'assessment',
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(body.rows);
-    });
-  });
-}
-
-/**
- * This function saves/updates generated headers in the database.
- *
- * @param {Array} doc - document to be saved.
- * @param {string} key - key for indexing.
- * @param {string} dbUrl - the result database.
- *
- * @returns {Object} saved document.
- */
-
-const saveHeaders = function(doc, key, dbUrl) {
-  const RESULT_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    RESULT_DB.get(key, (error, existingDoc) => {
-      let docObj = { column_headers: doc };
-      // if doc exists update it using its revision number.
-      if (!error) {
-        docObj._rev = existingDoc._rev;
-      }
-      RESULT_DB.insert(docObj, key, (err, body) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(body);
-      })
-    })
-  });
-}
-
-/**
- * This function retrieves an assessment document.
- *
- * @param {string} id - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Object} - assessment documents.
- */
-
-function getAssessment(id, dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.get(id, { include_docs: true }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(body);
-    });
-  });
-}
-
-/**
- * This function retrieves all subtest linked to an assessment.
- *
- * @param {string} id - id of assessment document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} - subtest documents.
- */
-
-function getSubtests(id, dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'subtestsByAssessmentId', {
-      key: id,
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      let subtestDoc = _.map(body.rows, (data) => data.doc);
-      let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
-      resolve(orderedSubtests);
-    })
-  });
-}
-
-/**
- * This function retrieves all questions linked to a subtest document.
- *
- * @param {string} subtestId - id of subtest document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} - question documents.
- */
-
-function getQuestionBySubtestId(subtestId, dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'questionsByParentId', {
-      key: subtestId,
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      let doc = _.map(body.rows, (data) => data.doc);
-      resolve(doc);
-    });
-  });
 }
 
 /***********************************************
@@ -493,8 +363,9 @@ function createId(doc, subtestCounts) {
 async function createSurvey(id, subtestCounts, dbUrl) {
   let count = subtestCounts.surveyCount;
   let surveyHeader = [];
-  let suffix = count > 0 ? `_${count}` : '';
-  let questions = await getQuestionBySubtestId(id, dbUrl);
+  let suffix = '';
+  // let suffix = count > 0 ? `_${count}` : '';
+  let questions = await dbQuery.getQuestionBySubtestId(id, dbUrl);
   let sortedDoc = _.sortBy(questions, [id, 'order']);
 
   for (doc of sortedDoc) {
@@ -535,58 +406,55 @@ async function createSurvey(id, subtestCounts, dbUrl) {
 async function createGrid(doc, subtestCounts, dbUrl) {
   let count = subtestCounts.gridCount;
   let gridHeader = [];
-  let gridData = [];
+  let gridData = [doc];
   let suffix = count > 0 ? `_${count}` : '';
-  let docId = doc.assessmentId || doc.curriculumId;
-  let resultDocs = await getResultInChunks(docId, dbUrl);
-
-  _.each(resultDocs, (item) => {
-    _.filter(item.doc.subtestData, (value) => {
-      if(value.prototype === 'grid') {
-        gridData.push(value);
-      }
-    });
-  });
 
   for (sub of gridData) {
-    let i; items = sub.data.items;
-    let variableName = sub.data.variable_name || sub.name.toLowerCase().replace(/\s/g, '_');
+    let subtestId = sub._id;
+    let variableName = sub.variableName;
+    variableName = variableName ? variableName : sub.name && sub.name.toLowerCase().replace(/\s/g, '_');
+
+    // if no variable name break out of loop
+    if (!variableName) {
+      break;
+    }
 
     gridHeader.push({
       header: `${variableName}_auto_stop${suffix}`,
-      key: `${sub.subtestId}.${variableName}_auto_stop${suffix}`
+      key: `${subtestId}.${variableName}_auto_stop${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_time_remain${suffix}`,
-      key: `${sub.subtestId}.${variableName}_time_remain${suffix}`
+      key: `${subtestId}.${variableName}_time_remain${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_capture_item_at_time${suffix}`,
-      key: `${sub.subtestId}.${variableName}_capture_item_at_time${suffix}`
+      key: `${subtestId}.${variableName}_capture_item_at_time${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_attempted${suffix}`,
-      key: `${sub.subtestId}.${variableName}_attempted${suffix}`
+      key: `${subtestId}.${variableName}_attempted${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_time_intermediate_captured${suffix}`,
-      key: `${sub.subtestId}.${variableName}_time_intermediate_captured${suffix}`
+      key: `${subtestId}.${variableName}_time_intermediate_captured${suffix}`
     });
     gridHeader.push({
       header: `${variableName}_time_allowed${suffix}`,
-      key: `${sub.subtestId}.${variableName}_time_allowed${suffix}`
+      key: `${subtestId}.${variableName}_time_allowed${suffix}`
     });
 
+    let i; let items = sub.items;
+
     for (i = 0; i < items.length; i++) {
-      let label = items[i].itemLabel;
       gridHeader.push({
-        header: `${variableName}_${label}${suffix}`,
-        key: `${sub.subtestId}.${variableName}_${label}${suffix}`
+        header: `${variableName}_${suffix}`,
+        key: `${subtestId}.${variableName}_${suffix}`
       });
     }
     gridHeader.push({
       header: `timestamp_${subtestCounts.timestampCount}`,
-      key: `${sub.subtestId}.timestamp_${subtestCounts.timestampCount}`
+      key: `${subtestId}.timestamp_${subtestCounts.timestampCount}`
     });
     subtestCounts.timestampCount++;
   }
@@ -643,5 +511,3 @@ function createCamera(doc, subtestCounts) {
 }
 
 exports.createColumnHeaders = createColumnHeaders;
-
-exports.saveHeaders = saveHeaders;

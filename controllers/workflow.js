@@ -15,7 +15,7 @@ const nano = require('nano');
  */
 
 const createColumnHeaders = require('./assessment').createColumnHeaders;
-const saveHeaders = require('./assessment').saveHeaders;
+const dbQuery = require('./../utils/dbQuery');
 
 /**
  * Retrieves all workflow collections in the database.
@@ -55,9 +55,9 @@ const saveHeaders = require('./assessment').saveHeaders;
  */
 
 exports.all = (req, res) => {
-  getAllWorkflow(req.body.base_db)
-    .then((data) => res.json(data))
-    .catch((err) => res.json(Error(err)))
+  dbQuery.getAllWorkflow(req.body.base_db)
+    .then((data) => res.json({ count: data.length, workflows: data }))
+    .catch((err) => res.json(Error(err)));
 }
 
 /**
@@ -91,15 +91,12 @@ exports.all = (req, res) => {
 exports.generateHeader = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
-  let workflowId;
+  const workflowId = req.params.id;
 
-  retrieveDoc(req.params.id, dbUrl)
-    .then((doc) => {
-      workflowId = doc.workflowId;
-      return createWorkflowHeaders(workflowId, dbUrl);
-    })
-    .then(async(colHeaders) => {
-      const saveResponse = await saveHeaders(colHeaders, workflowId, resultDbUrl);
+  dbQuery.retrieveDoc(workflowId, dbUrl)
+    .then(async(doc) => {
+      let colHeaders = await createWorkflowHeaders(doc, dbUrl);
+      const saveResponse = await dbQuery.saveHeaders(colHeaders, workflowId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -136,13 +133,14 @@ exports.generateAll = (req, res) => {
   const dbUrl = req.body.base_db;
   const resultDbUrl = req.body.result_db;
 
-  getAllWorkflow(dbUrl)
+  dbQuery.getAllWorkflow(dbUrl)
     .then(async(data) => {
       let saveResponse;
       for (item of data) {
         let workflowId = item.id;
-        let generatedWorkflowHeaders = await createWorkflowHeaders(workflowId, dbUrl);
-        saveResponse = await saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
+        let generatedWorkflowHeaders = await createWorkflowHeaders(item.doc, dbUrl);
+        saveResponse = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
+        console.log(saveResponse);
       }
       res.json(saveResponse);
     })
@@ -153,7 +151,7 @@ exports.generateAll = (req, res) => {
 /*****************************
  *     APPLICATION MODULE    *
  *****************************
-*/
+ */
 
 
 /**
@@ -165,92 +163,35 @@ exports.generateAll = (req, res) => {
  * @returns {Array} - generated headers for csv.
  */
 
-const createWorkflowHeaders = function(docId, dbUrl) {
+const createWorkflowHeaders = async function(data, dbUrl) {
   let workflowHeaders = [];
+  let messageCount = 0;
+  let workflowItems = [];
 
-  return new Promise ((resolve, reject) => {
-    retrieveDoc(docId, dbUrl)
-      .then(async(data) => {
-        let workflowCounts = {
-          assessmentCount: 0,
-          curriculumCount: 0,
-          messageCount: 0
-        };
+  for (item of data.children) {
+    let isProcessed = _.filter(workflowItems, {typesId: item.typesId});
 
-        for (item of data.children) {
-          if (item.type === 'assessment') {
-            let assessmentHeaders = await createColumnHeaders(item.typesId, workflowCounts.assessmentCount, dbUrl);
-            workflowHeaders.push(assessmentHeaders);
-            workflowCounts.assessmentCount++;
-          }
-          if (item.type === 'curriculum') {
-            let curriculumHeaders = await createColumnHeaders(item.typesId, workflowCounts.curriculumCount, dbUrl);
-            workflowHeaders.push(curriculumHeaders);
-            workflowCounts.curriculumCount++;
-          }
-          if (item.type === 'message') {
-            let messageSuffix = workflowCounts.messageCount > 0 ? `_${workflowCounts.messageCount}` : '';
-            workflowHeaders.push({ headers: `message${messageSuffix}`, key: `${docId}.message${messageSuffix}`});
-            workflowCounts.messageCount++;
-          }
-        }
-        workflowHeaders = _.flatten(workflowHeaders);
-
-        resolve(workflowHeaders);
-      })
-      .catch((err) => reject(err));
-  });
-}
-
-
-/********************************************
- *    HELPER FUNCTIONS FOR DATABASE QUERY   *
- ********************************************
-*/
-
-
-/**
- * This function retrieves all workflow collections in the database.
- *
- * @param {string} dbUrl - database url.
- *
- * @returns {Array} – all workflow documents.
- */
-
-const getAllWorkflow = function(dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    BASE_DB.view('ojai', 'byCollection', {
-      key: 'workflow',
-      include_docs: true
-    }, (err, body) => {
-      if (err) {
-        reject(err);
+    if (item.type === 'assessment') {
+      let count = isProcessed.length;
+      let assessmentHeaders = await createColumnHeaders(item.typesId, count, dbUrl);
+      workflowHeaders.push(assessmentHeaders);
+    }
+    if (item.type === 'curriculum') {
+      if (!isProcessed.length) {
+        let curriculumHeaders = await createColumnHeaders(item.typesId, 0, dbUrl);
+        workflowHeaders.push(curriculumHeaders);
       }
-      resolve(body.rows);
-    });
-  });
-}
+    }
+    if (item.type === 'message') {
+      let messageSuffix = messageCount > 0 ? `_${messageCount}` : '';
+      workflowHeaders.push({ headers: `message${messageSuffix}`, key: `${data._id}.message${messageSuffix}` });
+      messageCount++;
+    }
+    workflowItems.push(item);
+  }
+  workflowHeaders = _.flatten(workflowHeaders);
 
-/**
- * This function retrieves a document from the database.
- *
- * @param {string} docId - id of document.
- * @param {string} dbUrl - database url.
- *
- * @returns {Object} - retrieved document.
- */
-
-function retrieveDoc(docId, dbUrl) {
-  const BASE_DB = nano(dbUrl);
-  return new Promise ((resolve, reject) => {
-    BASE_DB.get(docId, (err, body) => {
-      if (err) {
-        reject(err);
-      }
-      resolve(body)
-    });
-  });
+  return workflowHeaders;
 }
 
 exports.createWorkflowHeaders = createWorkflowHeaders;
