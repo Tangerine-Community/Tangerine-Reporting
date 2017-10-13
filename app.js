@@ -72,7 +72,9 @@ const BASE_DB = nano(dbConfig.base_db);
 const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 
 feed.on('change', async(resp) => {
+  feed.pause();
   processChangedDocument(resp, dbConfig.base_db, dbConfig.result_db);
+  setTimeout(function() { feed.resume() }, 500);
 });
 
 feed.on('error', (err) => Error(err));

@@ -209,19 +209,21 @@ const generateResult = function(collections, count = 0) {
   collections = _.isArray(collections) ? collections : [collections];
 
   for (let [index, data] of collections.entries()) {
+    let collection = data.doc;
+    let collectionId = collection.workflowId || collection.assessmentId || collection.curriculumId;
     if (index === 0) {
-      indexKeys.year = new Date(data.doc.start_time).getFullYear().toString();
-      indexKeys.month = new Date(data.doc.start_time).toLocaleString('en-GB', { month: 'short' });
-      indexKeys.day = new Date(data.doc.start_time).getDay().toString();
-      indexKeys.parent_id = data.doc.workflowId || data.doc.assessmentId;
-      indexKeys.ref = data.doc.workflowId ? data.doc.tripId : data.doc._id;
+      indexKeys.year = new Date(collection.start_time).getFullYear().toString();
+      indexKeys.month = new Date(collection.start_time).toLocaleString('en-GB', { month: 'short' });
+      indexKeys.day = new Date(collection.start_time).getDay().toString();
+      indexKeys.parent_id = collectionId;
+      indexKeys.ref = collection.workflowId ? collection.tripId : collection._id;
       result.indexKeys = indexKeys;
     }
-    result[`${data.doc.assessmentId}.assessmentId${assessmentSuffix}`] = data.doc.assessmentId;
-    result[`${data.doc.assessmentId}.assessmentName${assessmentSuffix}`] = data.doc.assessmentName;
-    result[`${data.doc.assessmentId}.enumerator${assessmentSuffix}`] = data.doc.enumerator;
-    result[`${data.doc.assessmentId}.start_time${assessmentSuffix}`] = data.doc.start_time;
-    result[`${data.doc.assessmentId}.order_map${assessmentSuffix}`] = data.doc.order_map ? data.doc.order_map.join(',') : '';
+    result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
+    result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
+    result[`${collectionId}.enumerator${assessmentSuffix}`] = collection.enumerator;
+    result[`${collectionId}.start_time${assessmentSuffix}`] = collection.start_time;
+    result[`${collectionId}.order_map${assessmentSuffix}`] = collection.order_map ? collection.order_map.join(',') : '';
 
     let subtestCounts = {
       locationCount: 0,
@@ -235,8 +237,7 @@ const generateResult = function(collections, count = 0) {
       timestampCount: 0
     };
 
-    let subtestData = data.doc.subtestData;
-    subtestData = _.isArray(subtestData) ? subtestData : [subtestData];
+    let subtestData = _.isArray(collection.subtestData) ? collection.subtestData : [collection.subtestData];
 
     for (doc of subtestData) {
       if (doc.prototype === 'location') {
@@ -288,7 +289,7 @@ const generateResult = function(collections, count = 0) {
         subtestCounts.timestampCount++;
       }
       if (doc.prototype === 'complete') {
-        result[`${data.doc.assessmentId}.end_time${assessmentSuffix}`] = doc.data.end_time;
+        result[`${collectionId}.end_time${assessmentSuffix}`] = doc.data.end_time;
       }
     }
   }

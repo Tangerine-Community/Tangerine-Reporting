@@ -165,32 +165,27 @@ exports.generateAll = (req, res) => {
 
 const createWorkflowHeaders = async function(data, dbUrl) {
   let workflowHeaders = [];
-  let workflowCounts = {
-    assessmentCount: 0,
-    curriculumCount: 0,
-    messageCount: 0
-  };
+  let messageCount = 0;
   let workflowItems = [];
 
   for (item of data.children) {
+    let isProcessed = _.filter(workflowItems, {typesId: item.typesId});
+
     if (item.type === 'assessment') {
-      let assessmentHeaders = await createColumnHeaders(item.typesId, workflowCounts.assessmentCount, dbUrl);
+      let count = isProcessed.length;
+      let assessmentHeaders = await createColumnHeaders(item.typesId, count, dbUrl);
       workflowHeaders.push(assessmentHeaders);
-      workflowCounts.assessmentCount++;
     }
     if (item.type === 'curriculum') {
-      // Check if this curriculum has been processed earlier to prevent duplication.
-      let isCurriculumProcessed = _.find(workflowItems, {typesId: item.typesId});
-      if (!isCurriculumProcessed) {
-        let curriculumHeaders = await createColumnHeaders(item.typesId, workflowCounts.curriculumCount, dbUrl);
+      if (!isProcessed.length) {
+        let curriculumHeaders = await createColumnHeaders(item.typesId, 0, dbUrl);
         workflowHeaders.push(curriculumHeaders);
       }
-      workflowCounts.curriculumCount++;
     }
     if (item.type === 'message') {
-      let messageSuffix = workflowCounts.messageCount > 0 ? `_${workflowCounts.messageCount}` : '';
+      let messageSuffix = messageCount > 0 ? `_${messageCount}` : '';
       workflowHeaders.push({ headers: `message${messageSuffix}`, key: `${data._id}.message${messageSuffix}` });
-      workflowCounts.messageCount++;
+      messageCount++;
     }
     workflowItems.push(item);
   }

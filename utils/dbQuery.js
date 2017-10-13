@@ -116,7 +116,7 @@ exports.saveHeaders = (doc, key, dbUrl) => {
       let docObj = { column_headers: doc };
       // if doc exists update it using its revision number.
       if (!error) {
-        docObj._rev = existingDoc._rev;
+        docObj = _.assignIn(existingDoc, docObj);
       }
       RESULT_DB.insert(docObj, key, (err, body) => {
         if (err) {
@@ -156,7 +156,7 @@ exports.saveResult = (doc, dbUrl) => {
     RESULT_DB.get(docKey, (error, existingDoc) => {
       // if doc exists update it using its revision number.
       if (!error) {
-        docObj._rev = existingDoc._rev;
+        docObj = _.assignIn(existingDoc, docObj);
       }
       RESULT_DB.insert(docObj, docKey, (err, body) => {
         if (err) {
@@ -238,7 +238,7 @@ exports.getProcessedResults = function (ref, dbUrl) {
       if (err) {
         reject(err);
       }
-      resolve(body.rows)
+      resolve(body.rows);
     });
   });
 }

@@ -61,7 +61,9 @@ exports.changes = (req, res) => {
   const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 
   feed.on('change', (resp) => {
+    feed.pause();
     processChangedDocument(resp, dbUrl, resultDbUrl);
+    setTimeout(function() { feed.resume() }, 500);
   });
 
   feed.on('error', (err) => res.send(Error(err)));
