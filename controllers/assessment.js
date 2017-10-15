@@ -165,19 +165,21 @@ exports.generateAll = (req, res) => {
  * @returns {Object} processed headers for csv.
  */
 
-const createColumnHeaders = function(assessmentId, count = 0, dbUrl) {
+const createColumnHeaders = function(doc, count = 0, dbUrl) {
   let assessments = [];
+  let docId = doc.workflowId || doc.assessmentId || doc.curriculumId;
+  let collectionId = doc.typesId || doc.assessmentId || doc.curriculumId;
 
   return new Promise((resolve, reject) => {
-    dbQuery.retrieveDoc(assessmentId, dbUrl)
+    dbQuery.retrieveDoc(collectionId, dbUrl)
       .then((item) => {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
-        assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${assessmentId}.assessmentId${assessmentSuffix}` });
-        assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${assessmentId}.assessmentName${assessmentSuffix}` });
-        assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${assessmentId}.enumerator${assessmentSuffix}` });
-        assessments.push({ header: `start_time${assessmentSuffix}`, key: `${assessmentId}.start_time${assessmentSuffix}` });
-        assessments.push({ header: `order_map${assessmentSuffix}`, key: `${assessmentId}.order_map${assessmentSuffix}` });
-        return dbQuery.getSubtests(assessmentId, dbUrl);
+        assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${docId}.assessmentId${assessmentSuffix}` });
+        assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${docId}.assessmentName${assessmentSuffix}` });
+        assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${docId}.enumerator${assessmentSuffix}` });
+        assessments.push({ header: `start_time${assessmentSuffix}`, key: `${docId}.start_time${assessmentSuffix}` });
+        assessments.push({ header: `order_map${assessmentSuffix}`, key: `${docId}.order_map${assessmentSuffix}` });
+        return dbQuery.getSubtests(collectionId, dbUrl);
       })
       .then(async(subtestData) => {
         let subtestCounts = {
@@ -243,7 +245,7 @@ const createColumnHeaders = function(assessmentId, count = 0, dbUrl) {
           }
         }
         let assessmentSuffix = count > 0 ? `_${count}` : '';
-        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${assessmentId}.end_time${assessmentSuffix}` });
+        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docId}.end_time${assessmentSuffix}` });
 
         resolve(assessments);
       })
