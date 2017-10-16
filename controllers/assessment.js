@@ -69,7 +69,7 @@ exports.all = (req, res) => {
  *
  *    POST /assessment/headers/:id
  *
- *  where id refers to the id of the assessment document i.e. '_id' in couchDB.
+ *  where id refers to the assessment id of the document
  *
  *  The request object must contain the main database url and a
  *  result database url where the generated header will be saved.
@@ -96,9 +96,11 @@ exports.generateHeader = (req, res) => {
   const resultDbUrl = req.body.result_db;
   const assessmentId = req.params.id;
 
-  createColumnHeaders(assessmentId, 0, dbUrl)
-    .then(async(colHeaders) => {
-      const saveResponse = await dbQuery.saveHeaders(colHeaders, assessmentId, resultDbUrl);
+  dbQuery.retrieveDoc(assessmentId, dbUrl)
+    .then(async(data) => {
+      const docId = data.assessmentId || data.curriculumId;
+      const colHeaders = await createColumnHeaders(data, 0, dbUrl);
+      const saveResponse = await dbQuery.saveHeaders(colHeaders, docId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -141,7 +143,7 @@ exports.generateAll = (req, res) => {
 
       for (item of data) {
         let assessmentId = item.doc.assessmentId;
-        let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbUrl);
+        let generatedHeaders = await createColumnHeaders(item.doc, 0, dbUrl);
         saveResponse = await dbQuery.saveHeaders(generatedHeaders, assessmentId, resultDbUrl);
         console.log(saveResponse);
       }
