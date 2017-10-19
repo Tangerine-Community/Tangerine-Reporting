@@ -365,16 +365,26 @@ function createId(doc, subtestCounts) {
  */
 
 async function createSurvey(id, subtestCounts, dbUrl) {
-  let count = subtestCounts.surveyCount;
   let surveyHeader = [];
   let questions = await dbQuery.getQuestionBySubtestId(id, dbUrl);
   let sortedDoc = _.sortBy(questions, [id, 'order']);
 
   for (doc of sortedDoc) {
-    surveyHeader.push({
-      header: `${doc.name}`,
-      key: `${doc.subtestId}.${doc.name}`
-    });
+    if (doc.type === 'multiple') {
+      let optionsLen = doc.options.length;
+      for (let j = 0; j < optionsLen; j++) {
+        surveyHeader.push({
+          header: `${doc.name}_${j}`,
+          key: `${doc.subtestId}.${doc.name}_${j}`
+        });
+      }
+    }
+    else {
+      surveyHeader.push({
+        header: `${doc.name}`,
+        key: `${doc.subtestId}.${doc.name}`
+      });
+    }
   }
   surveyHeader.push({
     header: `timestamp_${subtestCounts.timestampCount}`,
