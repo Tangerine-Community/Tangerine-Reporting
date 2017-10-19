@@ -173,7 +173,6 @@ exports.processAll = (req, res) => {
   dbQuery.getAllResult(dbUrl)
     .then(async(data) => {
       let saveResponse;
-
       for (item of data) {
         let docId = item.assessmentId || item.curriculumId;
         let ref = item._id;

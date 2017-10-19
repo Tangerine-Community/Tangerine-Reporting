@@ -367,28 +367,14 @@ function createId(doc, subtestCounts) {
 async function createSurvey(id, subtestCounts, dbUrl) {
   let count = subtestCounts.surveyCount;
   let surveyHeader = [];
-  let suffix = '';
-  // let suffix = count > 0 ? `_${count}` : '';
   let questions = await dbQuery.getQuestionBySubtestId(id, dbUrl);
   let sortedDoc = _.sortBy(questions, [id, 'order']);
 
   for (doc of sortedDoc) {
-    let optionsLen = doc.options.length;
-    if (optionsLen <= 2) {
-      surveyHeader.push({
-        header: `${doc.name}${suffix}`,
-        key: `${id}.${doc.name}${suffix}`
-      });
-    }
-    else {
-      let i = 1;
-      for (i; i <= optionsLen; i++) {
-        surveyHeader.push({
-          header: `${doc.name}_${i}${suffix}`,
-          key: `${id}.${doc.name}.${i}${suffix}`
-        });
-      }
-    }
+    surveyHeader.push({
+      header: `${doc.name}`,
+      key: `${doc.subtestId}.${doc.name}`
+    });
   }
   surveyHeader.push({
     header: `timestamp_${subtestCounts.timestampCount}`,
@@ -451,9 +437,10 @@ async function createGrid(doc, subtestCounts, dbUrl) {
     let i; let items = sub.items;
 
     for (i = 0; i < items.length; i++) {
+      let label = items[i];
       gridHeader.push({
-        header: `${variableName}_${suffix}`,
-        key: `${subtestId}.${variableName}_${suffix}`
+        header: `${variableName}_${label}${suffix}`,
+        key: `${subtestId}.${variableName}_${label}${suffix}`
       });
     }
     gridHeader.push({
