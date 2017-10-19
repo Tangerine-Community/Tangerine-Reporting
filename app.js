@@ -68,6 +68,10 @@ app.post('/tangerine_changes', changesController.changes);
 const dbConfig = require('./config');
 const processChangedDocument = require('./controllers/changes').processChangedDocument;
 
+// TODO: Uncomment all commented code to start processing from last update sequence
+// const checkUpdateSequence = require('./utils/dbQuery').checkUpdateSequence
+// let seq = await checkUpdateSequence(resultDbUrl);
+
 const BASE_DB = nano(dbConfig.base_db);
 const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 

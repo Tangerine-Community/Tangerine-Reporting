@@ -289,3 +289,34 @@ exports.getResults = function(id, dbUrl) {
     });
   });
 }
+
+exports.checkUpdateSequence = (dbUrl) => {
+  let url = dbUrl + '?_changes';
+  const DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    DB.get('last_update_sequence', (err, obj) => {
+      if (err) {
+        reject(err);
+      }
+      console.log(obj);
+      resolve(obj);
+    });
+  });
+};
+
+exports.saveUpdateSequence = (dbUrl, doc) => {
+  const DB = nano(dbUrl)
+  return new Promise((resolve, reject) => {
+    DB.get(doc.key, (error, seqDoc) => {
+      if (!error) {
+        doc._rev = seqDoc._rev;
+      }
+      DB.insert(doc, doc.key, (err, body) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(body);
+      });
+    });
+  });
+};
