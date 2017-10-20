@@ -399,12 +399,14 @@ function processIDResult(body, subtestCounts) {
 function processSurveyResult(body, subtestCounts) {
   let count = subtestCounts.surveyCount;
   let surveyResult = {};
+  let response = [];
 
   for (doc in body.data) {
     if (typeof body.data[doc] === 'object') {
       for (item in body.data[doc]) {
         let surveyValue = translateSurveyValue(body.data[doc][item]);
-        surveyResult[`${body.subtestId}.${doc}.${item}`] = surveyValue;
+        response.push(surveyValue);
+        surveyResult[`${body.subtestId}.${doc}`] = response.join(',');
       }
     } else {
       let value = translateSurveyValue(body.data[doc]);
