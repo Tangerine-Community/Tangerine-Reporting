@@ -69,7 +69,7 @@ exports.all = (req, res) => {
  *
  *    POST /assessment/headers/:id
  *
- *  where id refers to the id of the assessment document i.e. '_id' in couchDB.
+ *  where id refers to the assessment id of the document
  *
  *  The request object must contain the main database url and a
  *  result database url where the generated header will be saved.
@@ -96,9 +96,11 @@ exports.generateHeader = (req, res) => {
   const resultDbUrl = req.body.result_db;
   const assessmentId = req.params.id;
 
-  createColumnHeaders(assessmentId, 0, dbUrl)
-    .then(async(colHeaders) => {
-      const saveResponse = await dbQuery.saveHeaders(colHeaders, assessmentId, resultDbUrl);
+  dbQuery.retrieveDoc(assessmentId, dbUrl)
+    .then(async(data) => {
+      const docId = data.assessmentId || data.curriculumId;
+      const colHeaders = await createColumnHeaders(data, 0, dbUrl);
+      const saveResponse = await dbQuery.saveHeaders(colHeaders, docId, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -141,7 +143,7 @@ exports.generateAll = (req, res) => {
 
       for (item of data) {
         let assessmentId = item.doc.assessmentId;
-        let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbUrl);
+        let generatedHeaders = await createColumnHeaders(item.doc, 0, dbUrl);
         saveResponse = await dbQuery.saveHeaders(generatedHeaders, assessmentId, resultDbUrl);
         console.log(saveResponse);
       }
@@ -165,19 +167,21 @@ exports.generateAll = (req, res) => {
  * @returns {Object} processed headers for csv.
  */
 
-const createColumnHeaders = function(assessmentId, count = 0, dbUrl) {
+const createColumnHeaders = function(doc, count = 0, dbUrl) {
   let assessments = [];
+  let docId = doc.workflowId || doc.assessmentId || doc.curriculumId;
+  let collectionId = doc.typesId || doc.assessmentId || doc.curriculumId;
 
   return new Promise((resolve, reject) => {
-    dbQuery.retrieveDoc(assessmentId, dbUrl)
+    dbQuery.retrieveDoc(collectionId, dbUrl)
       .then((item) => {
         let assessmentSuffix = count > 0 ? `_${count}` : '';
-        assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${assessmentId}.assessmentId${assessmentSuffix}` });
-        assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${assessmentId}.assessmentName${assessmentSuffix}` });
-        assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${assessmentId}.enumerator${assessmentSuffix}` });
-        assessments.push({ header: `start_time${assessmentSuffix}`, key: `${assessmentId}.start_time${assessmentSuffix}` });
-        assessments.push({ header: `order_map${assessmentSuffix}`, key: `${assessmentId}.order_map${assessmentSuffix}` });
-        return dbQuery.getSubtests(assessmentId, dbUrl);
+        assessments.push({ header: `assessment_id${assessmentSuffix}`, key: `${docId}.assessmentId${assessmentSuffix}` });
+        assessments.push({ header: `assessment_name${assessmentSuffix}`, key: `${docId}.assessmentName${assessmentSuffix}` });
+        assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${docId}.enumerator${assessmentSuffix}` });
+        assessments.push({ header: `start_time${assessmentSuffix}`, key: `${docId}.start_time${assessmentSuffix}` });
+        assessments.push({ header: `order_map${assessmentSuffix}`, key: `${docId}.order_map${assessmentSuffix}` });
+        return dbQuery.getSubtests(collectionId, dbUrl);
       })
       .then(async(subtestData) => {
         let subtestCounts = {
@@ -243,7 +247,7 @@ const createColumnHeaders = function(assessmentId, count = 0, dbUrl) {
           }
         }
         let assessmentSuffix = count > 0 ? `_${count}` : '';
-        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${assessmentId}.end_time${assessmentSuffix}` });
+        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docId}.end_time${assessmentSuffix}` });
 
         resolve(assessments);
       })
@@ -361,30 +365,15 @@ function createId(doc, subtestCounts) {
  */
 
 async function createSurvey(id, subtestCounts, dbUrl) {
-  let count = subtestCounts.surveyCount;
   let surveyHeader = [];
-  let suffix = '';
-  // let suffix = count > 0 ? `_${count}` : '';
   let questions = await dbQuery.getQuestionBySubtestId(id, dbUrl);
   let sortedDoc = _.sortBy(questions, [id, 'order']);
 
   for (doc of sortedDoc) {
-    let optionsLen = doc.options.length;
-    if (optionsLen <= 2) {
-      surveyHeader.push({
-        header: `${doc.name}${suffix}`,
-        key: `${id}.${doc.name}${suffix}`
-      });
-    }
-    else {
-      let i = 1;
-      for (i; i <= optionsLen; i++) {
-        surveyHeader.push({
-          header: `${doc.name}_${i}${suffix}`,
-          key: `${id}.${doc.name}.${i}${suffix}`
-        });
-      }
-    }
+    surveyHeader.push({
+      header: `${doc.name}`,
+      key: `${doc.subtestId}.${doc.name}`
+    });
   }
   surveyHeader.push({
     header: `timestamp_${subtestCounts.timestampCount}`,
@@ -447,9 +436,10 @@ async function createGrid(doc, subtestCounts, dbUrl) {
     let i; let items = sub.items;
 
     for (i = 0; i < items.length; i++) {
+      let label = items[i];
       gridHeader.push({
-        header: `${variableName}_${suffix}`,
-        key: `${subtestId}.${variableName}_${suffix}`
+        header: `${variableName}_${label}${suffix}`,
+        key: `${subtestId}.${variableName}_${label}${suffix}`
       });
     }
     gridHeader.push({

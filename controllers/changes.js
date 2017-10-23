@@ -16,13 +16,12 @@ const nano = require('nano');
  * Local Depencies.
  */
 
+const dbConfig = require('./../config');
+const dbQuery = require('./../utils/dbQuery');
 const generateAssessmentHeaders = require('./assessment').createColumnHeaders;
 const processAssessmentResult = require('./result').generateResult;
 const generateWorkflowHeaders = require('./workflow').createWorkflowHeaders;
 const processWorkflowResult = require('./trip').processWorkflowResult;
-const saveHeaders = require('./../utils/dbQuery').saveHeaders;
-const saveResult = require('./../utils/dbQuery').saveResult;
-const dbConfig = require('./../config');
 
 /**
  * Processes any recently changed document in the database based on its collection type.
@@ -54,13 +53,17 @@ const dbConfig = require('./../config');
  * @param res - HTTP response object
  */
 
-exports.changes = (req, res) => {
+exports.changes = async(req, res) => {
   const dbUrl = req.body.base_db || dbConfig.base_db;
   const resultDbUrl = req.body.result_db || dbConfig.result_db;
+
+  // TODO: Uncomment all commented code to start processing from last update sequence
+  // let seq = await dbQuery.checkUpdateSequence(resultDbUrl);
+
   const BASE_DB = nano(dbUrl);
   const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 
-  feed.on('change', (resp) => {
+  feed.on('change', async(resp) => {
     feed.pause();
     processChangedDocument(resp, dbUrl, resultDbUrl);
     setTimeout(function() { feed.resume() }, 500);
@@ -82,33 +85,42 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const isCurriculum = (collectionType === 'curriculum') ? true : false;
   const isQuestion = (collectionType === 'question') ? true : false;
   const isSubtest = (collectionType === 'subtest') ? true : false;
+  // let seqDoc = { key: 'last_update_sequence' };
 
   if (isWorkflowIdSet && isResult) {
+    // seqDoc = { last_seq: resp.seq };
     console.info('\n<<<=== START PROCESSING WORKFLOW RESULT ===>>>\n');
     const workflowResult = await processWorkflowResult([resp], dbUrl);
-    const saveResponse = await saveResult(workflowResult, resultDbUrl);
+    const saveResponse = await dbQuery.saveResult(workflowResult, resultDbUrl);
     console.log(saveResponse);
+    // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
     console.info('\n<<<=== END PROCESSING WORKFLOW RESULT ===>>>\n');
   }
   if (!isWorkflowIdSet && isResult) {
+    // seqDoc = { last_seq: resp.seq };
     console.info('\n<<<=== START PROCESSING ASSESSMENT RESULT  ===>>>\n');
     const assessmentResult = await processAssessmentResult([resp]);
-    const saveResponse = await saveResult(assessmentResult, resultDbUrl);
+    const saveResponse = await dbQuery.saveResult(assessmentResult, resultDbUrl);
     console.log(saveResponse);
+    // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
     console.info('\n<<<=== END PROCESSING ASSESSMENT RESULT ===>>>\n');
   }
   if (isWorkflow) {
+    // seqDoc = { last_seq: resp.seq };
     console.info('\n<<<=== START PROCESSING WORKFLOW COLLECTION  ===>>>\n');
     const workflowHeaders = await generateWorkflowHeaders(resp.doc, dbUrl);
-    const saveResponse = await saveHeaders(workflowHeaders, workflowId, resultDbUrl);
+    const saveResponse = await dbQuery.saveHeaders(workflowHeaders, workflowId, resultDbUrl);
     console.log(saveResponse);
+    // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
     console.info('\n<<<=== END PROCESSING WORKFLOW COLLECTION ===>>>\n');
   }
   if (isAssessment || isCurriculum || isQuestion || isSubtest) {
+    // seqDoc = { last_seq: resp.seq };
     console.info('\n<<<=== START PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>\n');
     const assessmentHeaders = await generateAssessmentHeaders(assessmentId, 0, dbUrl);
-    const saveResponse = await saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
+    const saveResponse = await dbQuery.saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
     console.log(saveResponse);
+    // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
     console.info('\n<<<=== END PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION ===>>>\n');
   }
 }

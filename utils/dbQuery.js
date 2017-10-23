@@ -33,6 +33,29 @@ exports.getAllAssessment = (dbUrl) => {
 }
 
 /**
+ * This function retrieves all curriculum collections in the database.
+ *
+ * @param {string} dbUrl - database url.
+ *
+ * @returns {Array} – all curriculum documents.
+ */
+
+exports.getAllCurriculum = (dbUrl) => {
+  let BASE_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    BASE_DB.view('ojai', 'byCollection', {
+      key: 'curriculum',
+      include_docs: true
+    }, (err, body) => {
+      if (err) {
+        reject(err);
+      }
+      resolve(body.rows);
+    });
+  });
+}
+
+/**
  * This function retrieves all workflow collections in the database.
  *
  * @param {string} dbUrl - database url.
@@ -223,7 +246,7 @@ exports.getQuestionBySubtestId = (subtestId, dbUrl) => {
  * This function retrieves all processed result for a given document id
  *
  * @param {string} ref - id of document.
- * @param {string} dbUrl - database url.
+ * @param {string} dbUrl - result database url.
  *
  * @returns {Array} - result documents.
  */
@@ -247,7 +270,7 @@ exports.getProcessedResults = function (ref, dbUrl) {
  * This function retrieves a result document.
  *
  * @param {string} id - trip id of document.
- * @param {string} dbUrl - database url.
+ * @param {string} dbUrl - base database url.
  *
  * @returns {Array} - result documents.
  */
@@ -266,3 +289,34 @@ exports.getResults = function(id, dbUrl) {
     });
   });
 }
+
+exports.checkUpdateSequence = (dbUrl) => {
+  let url = dbUrl + '?_changes';
+  const DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    DB.get('last_update_sequence', (err, obj) => {
+      if (err) {
+        reject(err);
+      }
+      console.log(obj);
+      resolve(obj);
+    });
+  });
+};
+
+exports.saveUpdateSequence = (dbUrl, doc) => {
+  const DB = nano(dbUrl)
+  return new Promise((resolve, reject) => {
+    DB.get(doc.key, (error, seqDoc) => {
+      if (!error) {
+        doc._rev = seqDoc._rev;
+      }
+      DB.insert(doc, doc.key, (err, body) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(body);
+      });
+    });
+  });
+};

@@ -128,14 +128,11 @@ exports.processAll = (req, res) => {
 
 const processWorkflowResult = function(data) {
   let workflowResults = {};
-  let resultItems = [];
-
+  let count = 0;
   for (item of data) {
-    let isProcessed = _.filter(resultItems, { assessmentId: item.doc.assessmentId });
-    let count = isProcessed.length;
     let processedResult = processResult(item, count);
     workflowResults = _.assignIn(workflowResults, processedResult);
-    resultItems.push(item.doc);
+    count++;
   }
   return workflowResults;
 }

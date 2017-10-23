@@ -44,7 +44,7 @@ async function generateAssessmentHeaders(data) {
   let response;
   for (item of data) {
     let assessmentId = item.doc.assessmentId;
-    let generatedHeaders = await createColumnHeaders(assessmentId, 0, dbUrl);
+    let generatedHeaders = await createColumnHeaders(item.doc, 0, dbConfig.base_db);
     response = await dbQuery.saveHeaders(generatedHeaders, assessmentId, dbConfig.result_db);
     console.log(response);
   }
@@ -170,9 +170,13 @@ tangerine
   .command('assessment-header <id>')
   .description('generate header for an assessment')
   .action((id) => {
-    createColumnHeaders(id, 0, dbConfig.base_db)
+
+    dbQuery.retrieveDoc(id, dbConfig.base_db)
       .then(async(data) => {
-        console.log(await dbQuery.saveHeaders(data, id, dbConfig.result_db));
+        const docId = data.assessmentId || data.curriculumId;
+        const colHeaders = await createColumnHeaders(data, 0, dbConfig.base_db);
+        const saveResponse = await dbQuery.saveHeaders(colHeaders, docId, dbConfig.result_db);
+        console.log(saveResponse);
         console.log(chalk.green('✓ Successfully generate and save assessment header'));
       })
       .catch((err) => Error(err));
