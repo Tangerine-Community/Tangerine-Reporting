@@ -122,46 +122,50 @@ async function generateWorkflowResult(data) {
  */
 
 /**
- * This part is executed when the command `tangerine-reporting assessments` is run.
+ * This part retrieves all assessments in the database.
+ * It is executed when the command `tangerine-reporting assessments` is run.
  */
 tangerine
   .version('0.1.0')
-  .command('assessments [dbUrl]')
+  .command('assessments')
   .description('Retrieves all assessments in the database')
-  .action(async(dbUrl) => {
-    const db = dbConfig.base_db || dbUrl;
+  .action(async() => {
+    const db = dbConfig.base_db;
     console.log(await dbQuery.getAllAssessment(db));
     console.log(chalk.green('✓ Successfully retrieve all assessments'));
   });
 
 /**
- * This part is executed when the command `tangerine-reporting workflows` is run.
+ * This part retrieves all workflow documents in the database.
+ * It is executed when the command `tangerine-reporting workflows` is run.
  */
 tangerine
   .version('0.1.0')
-  .command('workflows [dbUrl]')
+  .command('workflows')
   .description('Retrieves all workflows in the database')
-  .action(async(dbUrl) => {
-    const db = dbConfig.base_db || dbUrl;
+  .action(async() => {
+    const db = dbConfig.base_db;
     console.log(await dbQuery.getAllWorkflow(db));
     console.log(chalk.green('✓ Successfully retrieve all workflows'));
   });
 
 /**
- * This part is executed when the command `tangerine-reporting results` is run.
+ * This part retrieves all result documents in the database.
+ * It is executed when the command `tangerine-reporting results` is run.
  */
 tangerine
   .version('0.1.0')
-  .command('results [dbUrl]')
+  .command('results')
   .description('Retrieves all results in the database')
-  .action(async(dbUrl) => {
-    const db = dbConfig.base_db || dbUrl;
+  .action(async() => {
+    const db = dbConfig.base_db;
     console.log(await dbQuery.getAllResult(db));
     console.log(chalk.green('✓ Successfully retrieve all results'));
   });
 
 /**
- * This part is executed when the command `tangerine-reporting assessment-header <assessment_id>` is run.
+ * This part generates an assessment header.
+ * It is executed when the command `tangerine-reporting assessment-header <assessment_id>` is run.
  *
  * @param {string} id - assessment id is required.
  */
@@ -170,7 +174,6 @@ tangerine
   .command('assessment-header <id>')
   .description('generate header for an assessment')
   .action((id) => {
-
     dbQuery.retrieveDoc(id, dbConfig.base_db)
       .then(async(data) => {
         const docId = data.assessmentId || data.curriculumId;
@@ -183,7 +186,8 @@ tangerine
   });
 
 /**
- * This part is executed when the command `tangerine-reporting assessment-result <assessment_id>` is run.
+ * This part processes an assessment result.
+ * It is executed when the command `tangerine-reporting assessment-result <assessment_id>` is run.
  *
  * @param {string} id - assessment id is required.
  */
@@ -204,7 +208,8 @@ tangerine
   });
 
 /**
- * This part is executed when the command `tangerine-reporting workflow-header <workflow_id>` is run.
+ * This part generates a workflow header.
+ * It is executed when the command `tangerine-reporting workflow-header <workflow_id>` is run.
  *
  * @param {string} id - workflow id is required.
  */
@@ -224,7 +229,8 @@ tangerine
   });
 
 /**
- * This part is executed when the command `tangerine-reporting workflow-result <workflow_id>` is run.
+ * This part processes a workflow result.
+ * It is executed when the command `tangerine-reporting workflow-result <workflow_id>` is run.
  *
  * @param {string} id - workflow id is required.
  */
@@ -244,19 +250,20 @@ tangerine
   });
 
 /**
- * This part is executed when the command `tangerine-reporting create-all [flags]` is run.
+ * This part processes headers or results based on the flag passed to it.
  *
+ * It is executed when the command `tangerine-reporting create-all [flags]` is run.
  * The various flags are required for this to execute.
- *
+ * E.g. run `tangerine-reporting create-all -w` => to generate all workflow headers in the database
  */
 tangerine
   .version('0.1.0')
   .command('create-all')
   .description('create headers or results based on the collection type')
   .option('-a', '--assessment', 'create all assessment headers')
-  .option('-r', '--result', 'create all assessment results')
+  .option('-r', '--result', 'process all assessment results')
   .option('-w', '--workflow', 'create all workflow headers')
-  .option('-t', '--workflow-result', 'generate all workflow results')
+  .option('-t', '--workflow-result', 'process all workflow results')
   .action((options) => {
     if (!options.A && !options.R && !options.W && !options.T) {
       console.log(chalk.red('Please select a flag either "-a", "-r", "-t", or "-w" flag along with your command. \n'));
@@ -298,26 +305,31 @@ tangerine
   });
 
 /**
- * This part is executed when the command `tangerine-reporting generate-csv <header_id> <result_id` is run.
+ * This part generates a csv file.
+ * It is executed when the command `tangerine-reporting generate-csv <docId>` is run.
  *
- * @param {string} headerId - generate header id from the result database is required.
- * @param {string} resultId - processed result id from the result database is required.
+ * @param {string} docId - workflow id  of the document
  */
 tangerine
   .version('0.1.0')
-  .command('generate-csv <headerId> <resultId>')
+  .command('generate-csv <docId>')
   .description('creates a csv file')
-  .action((headerId, resultId) => {
-    dbQuery.retrieveDoc(headerId, dbConfig.result_db)
+  .action((docId) => {
+    dbQuery.retrieveDoc(docId, dbConfig.result_db)
       .then(async(docHeaders) => {
-        const result = await dbQuery.retrieveDoc(resultId, dbConfig.result_db);
+        const result = await dbQuery.getProcessedResults(docId, dbConfig.result_db);
         await generateCSV(docHeaders, result);
         console.log(chalk.green('✓ CSV Successfully Generated'));
       })
       .catch((err) => Error(err));
   });
 
-
+/**
+ * This part retrieves a document from the database.
+ * It is executed when the command `tangerine-reporting get <id>` is run.
+ *
+ * @param {string} id - id of the document
+ */
 tangerine
   .version('0.1.0')
   .command('get <id>')
@@ -331,8 +343,12 @@ tangerine
       .catch((err) => Error(err));
   });
 
-
-
+/**
+ * This part retrieves all result by tripId.
+ * It is executed when the command `tangerine-reporting get-result <id>` is run.
+ *
+ * @param {string} id - id of the result document
+ */
 tangerine
   .version('0.1.0')
   .command('get-result <id>')
