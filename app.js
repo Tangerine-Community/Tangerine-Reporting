@@ -29,7 +29,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
 /**
- * Controllers or route handlers.
+ * Controllers.
  */
 
 const assessmentController = require('./controllers/assessment');
@@ -38,6 +38,31 @@ const workflowController = require('./controllers/workflow');
 const csvController = require('./controllers/generate_csv');
 const changesController = require('./controllers/changes');
 const tripController = require('./controllers/trip');
+
+
+/**
+ * Hook data processing function to couchDB changes feed.
+ */
+
+const dbConfig = require('./config');
+const dbQuery = require('./utils/dbQuery');
+const processChangedDocument = require('./controllers/changes').processChangedDocument;
+
+// TODO: Uncomment all commented code to start processing from last update sequence
+// const checkUpdateSequence = require('./utils/dbQuery').checkUpdateSequence
+// let seq = await checkUpdateSequence(resultDbUrl);
+
+const BASE_DB = nano(dbConfig.base_db);
+const feed = BASE_DB.follow({ since: 'now', include_docs: true });
+
+feed.on('change', async(resp) => {
+  feed.pause();
+  processChangedDocument(resp, dbConfig.base_db, dbConfig.result_db);
+  setTimeout(function() { feed.resume() }, 500);
+});
+
+feed.on('error', (err) => Error(err));
+feed.follow();
 
 /**
  * App routes.
@@ -60,29 +85,7 @@ app.post('/workflow/result/:id', tripController.processResult);
 
 app.post('/generate_csv/:id', csvController.generate);
 app.post('/tangerine_changes', changesController.changes);
-
-/**
- * Hook processing function to couchDB changes feed.
- */
-
-const dbConfig = require('./config');
-const processChangedDocument = require('./controllers/changes').processChangedDocument;
-
-// TODO: Uncomment all commented code to start processing from last update sequence
-// const checkUpdateSequence = require('./utils/dbQuery').checkUpdateSequence
-// let seq = await checkUpdateSequence(resultDbUrl);
-
-const BASE_DB = nano(dbConfig.base_db);
-const feed = BASE_DB.follow({ since: 'now', include_docs: true });
-
-feed.on('change', async(resp) => {
-  feed.pause();
-  processChangedDocument(resp, dbConfig.base_db, dbConfig.result_db);
-  setTimeout(function() { feed.resume() }, 500);
-});
-
-feed.on('error', (err) => Error(err));
-feed.follow();
+app.post('/get_processed_results/:id', dbQuery.processedResultsById);
 
 
 /**

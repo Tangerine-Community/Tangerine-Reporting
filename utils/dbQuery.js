@@ -320,3 +320,16 @@ exports.saveUpdateSequence = (dbUrl, doc) => {
     });
   });
 };
+
+exports.processedResultsById = function (req, res) {
+  const RESULT_DB = nano(req.body.result_db);
+  RESULT_DB.view('dashReporting', 'byParentId', {
+    key: req.params.id,
+    include_docs: true
+  }, (err, body) => {
+    if (err) {
+      res.send(err);
+    }
+    res.json(body.rows);
+  });
+}
