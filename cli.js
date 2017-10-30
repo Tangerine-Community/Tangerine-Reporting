@@ -351,12 +351,13 @@ tangerine
  */
 tangerine
   .version('0.1.0')
-  .command('get-result <id>')
-  .description('retrieve a result document from the database')
+  .command('get-processed-result <id>')
+  .description('retrieve all processed results by id from the database')
   .action(function(id) {
-    dbQuery.getResults(id, dbConfig.base_db)
+    dbQuery.getProcessedResults(id, dbConfig.result_db)
       .then((data) => {
         console.log(data);
+        console.log(chalk.green('✓ Successfully retrieved all processed results'));
       })
       .catch((err) => Error(err));
   });
