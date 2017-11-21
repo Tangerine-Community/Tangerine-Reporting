@@ -131,7 +131,7 @@ exports.processResult = (req, res) => {
   dbQuery.retrieveDoc(docId, dbUrl)
     .then(async(data) => {
       let resultDoc = { doc: data };
-      const result = generateResult(resultDoc);
+      const result = await generateResult(resultDoc, 0, dbUrl);
       const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
       res.json(saveResponse);
     })
@@ -201,27 +201,32 @@ exports.processAll = (req, res) => {
  * @returns {Object} - processed result for csv.
  */
 
-const generateResult = function(collections, count = 0) {
+const generateResult = async function(collections, count = 0, dbUrl) {
+  let enumeratorName;
   let result = {};
   let indexKeys = {};
   let assessmentSuffix = count > 0 ? `_${count}` : '';
-  collections = _.isArray(collections) ? collections : [collections];
+  let resultCollections = _.isArray(collections) ? collections : [collections];
 
-  for (let [index, data] of collections.entries()) {
+  for (let [index, data] of resultCollections.entries()) {
     let collection = data.doc;
     let collectionId = collection.workflowId || collection.assessmentId || collection.curriculumId;
+    enumeratorName = collection.enumerator;
+
     if (index === 0) {
-      indexKeys.year = new Date(collection.start_time).getFullYear().toString();
+      indexKeys.year = new Date(collection.start_time).getFullYear();
       indexKeys.month = new Date(collection.start_time).toLocaleString('en-GB', { month: 'short' });
-      indexKeys.day = new Date(collection.start_time).getDay().toString();
+      indexKeys.day = new Date(collection.start_time).getDay();
+      indexKeys.time = new Date(collection.start_time).toLocaleTimeString();
       indexKeys.parent_id = collectionId;
       indexKeys.ref = collection.workflowId ? collection.tripId : collection._id;
       result.indexKeys = indexKeys;
     }
+
     result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
     result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
     result[`${collectionId}.enumerator${assessmentSuffix}`] = collection.enumerator;
-    result[`${collectionId}.start_time${assessmentSuffix}`] = collection.start_time;
+    result[`${collectionId}.start_time${assessmentSuffix}`] = new Date(collection.start_time).toLocaleTimeString();
     result[`${collectionId}.order_map${assessmentSuffix}`] = collection.order_map ? collection.order_map.join(',') : '';
 
     let subtestCounts = {
@@ -288,10 +293,18 @@ const generateResult = function(collections, count = 0) {
         subtestCounts.timestampCount++;
       }
       if (doc.prototype === 'complete') {
-        result[`${collectionId}.end_time${assessmentSuffix}`] = doc.data.end_time;
+        result[`${collectionId}.end_time${assessmentSuffix}`] = new Date(doc.data.end_time).toLocaleTimeString();
       }
     }
   }
+
+  let username = `user-${enumeratorName}`;
+  let userDetails = await dbQuery.getUserDetails(username, dbUrl);
+  result.userRole = userDetails.role;
+  result.mPesaNumber = userDetails.mPesaNumber;
+  result.phoneNumber = userDetails.phoneNumber;
+  result.fullName = `${userDetails.firstName} ${userDetails.lastName}`;
+
   return result;
 }
 
@@ -322,7 +335,7 @@ function processLocationResult(body, subtestCounts) {
     let key = `${subtestId}.${labels[i].toLowerCase()}${locSuffix}`
     locationResult[key] = location[i].toLowerCase();
   }
-  locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.timestamp;
+  locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = new Date(doc.timestamp).toLocaleTimeString();
 
   return locationResult;
 }
@@ -344,7 +357,7 @@ function processDatetimeResult(body, subtestCounts) {
     [`${body.subtestId}.month${suffix}`]: body.data.month,
     [`${body.subtestId}.day${suffix}`]: body.data.day,
     [`${body.subtestId}.assess_time${suffix}`]: body.data.time,
-    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: new Date(body.timestamp).toLocaleTimeString()
   }
   return datetimeResult;
 }
@@ -363,7 +376,7 @@ function processConsentResult(body, subtestCounts) {
   let suffix = count > 0 ? `_${count}` : '';
   consentResult = {
     [`${body.subtestId}.consent${suffix}`]: body.data.consent,
-    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: new Date(body.timestamp).toLocaleTimeString()
   };
   return consentResult;
 }
@@ -382,7 +395,7 @@ function processIDResult(body, subtestCounts) {
   let suffix = count > 0 ? `_${count}` : '';
   idResult = {
     [`${body.subtestId}.id${suffix}`]: body.data.participant_id,
-    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: new Date(body.timestamp).toLocaleTimeString()
   };
   return idResult;
 }
@@ -413,7 +426,7 @@ function processSurveyResult(body, subtestCounts) {
       surveyResult[`${body.subtestId}.${doc}`] = value;
     }
   }
-  surveyResult[`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
+  surveyResult[`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`] = new Date(body.timestamp).toLocaleTimeString();
 
   return surveyResult;
 }
@@ -445,7 +458,7 @@ function processGridResult(body, subtestCounts) {
     let gridValue = translateGridValue(doc.itemResult);
     gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = gridValue;
   }
-  gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
+  gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = new Date(body.timestamp).toLocaleTimeString();
 
   return gridResult;
 }
@@ -471,7 +484,7 @@ function processGpsResult(doc, subtestCounts) {
   gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altAcc;
   gpsResult[`${doc.subtestId}.heading${suffix}`] = doc.data.heading;
   gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
-  gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.data.timestamp;
+  gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = new Date(doc.data.timestamp).toLocaleTimeString();
 
   return gpsResult;
 }
@@ -493,7 +506,7 @@ function processCamera(body, subtestCounts) {
 
   cameraResult[`${body.subtestId}.${varName}_photo_captured${suffix}`] = body.data.imageBase64;
   cameraResult[`${body.subtestId}.${varName}_photo_url${suffix}`] = body.data.imageBase64;
-  cameraResult[`${body.subtestId}.timestamp_${subtestsCount.timestampCount}`] = body.timestamp;
+  cameraResult[`${body.subtestId}.timestamp_${subtestsCount.timestampCount}`] = new Date(body.timestamp).toLocaleTimeString();
 
   return cameraResult;
 }

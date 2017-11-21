@@ -171,7 +171,8 @@ exports.saveResult = (doc, dbUrl) => {
     parent_id: cloneDoc.indexKeys.parent_id,
     result_year: cloneDoc.indexKeys.year,
     result_month: cloneDoc.indexKeys.month,
-    result_day: cloneDoc.indexKeys.day,
+    result_day : cloneDoc.indexKeys.day,
+    result_time : cloneDoc.indexKeys.time,
     processed_results: doc
   };
 
@@ -331,5 +332,27 @@ exports.processedResultsById = function (req, res) {
       res.send(err);
     }
     res.json(body.rows);
+  });
+}
+
+
+/**
+ * @description – This function retrieves enumerator information.
+ *
+ * @param {string} enumerator - name of the enumerator.
+ * @param {string} dbUrl - base database url.
+ *
+ * @returns {Object} - user document.
+ */
+
+exports.getUserDetails = function (enumerator, dbUrl) {
+  const BASE_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    BASE_DB.get(enumerator, (err, body) => {
+      if (err) {
+        reject(err);
+      }
+      resolve(body);
+    });
   });
 }
