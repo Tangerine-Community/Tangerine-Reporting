@@ -225,6 +225,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
       result.indexKeys = indexKeys;
     }
 
+    result.isValid = validateResult(collection);
     result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
     result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
     result[`${collectionId}.enumerator${assessmentSuffix}`] = collection.enumerator;
@@ -242,8 +243,6 @@ const generateResult = async function(collections, count = 0, dbUrl) {
       gridCount: 0,
       timestampCount: 0
     };
-
-    let isResultValid = validateResult(collection);
 
     let subtestData = _.isArray(collection.subtestData) ? collection.subtestData : [collection.subtestData];
 
@@ -547,25 +546,55 @@ function translateGridValue(databaseValue) {
   return gridValueMap[databaseValue] || String(databaseValue);
 };
 
-function validateResult(data) {
-  let startTime = moment(data.start_time);
-  let endTime = moment(data.end_time);
+/**
+ * This function checks the validity of the document
+ * based on certain criteria.
+ *
+ * @param {object} doc - a result collection.
+ *
+ * @returns {boolean} - result validity
+ */
 
-  // check if assessment was captured between 8am and 3pm
-  let isCapturedTime = startTime.hours() >= 8 && endTime.hours() <= 3;
+function validateResult(doc) {
+  let endTime, i, subtest;
+  let startTime = moment(doc.start_time);
+  let ref = doc.subtestData;
 
-  // check if assessment was captured during weekdays
-  let isDuringWeekday = startTime.weekday > 0 && startTime.weekday < 6;
-
-  // check if assessment has gps
-  let hasGps = data.hasOwnProperty('longitude') && data.hasOwnProperty('lattitude');
-
-  // check if the different between start time & end time of an assessment is more than 20mins
-  let isAssessmentDurationValid = endTime.diff(startTime, 'minutes') > 20;
+  // check if result has gps
+  let hasGps = doc.hasOwnProperty('longitude') && doc.hasOwnProperty('lattitude');
 
   // check if result is complete
+  for (i = 0; i < ref.length; i++) {
+    subtest = ref[i];
+    if (subtest.prototype === "complete") {
+      console.log('result was completed');
+      endTime = moment(subtest.data.end_time);
+      break;
+    }
+  }
 
-  // check if the result has contain 3 pupils assessment
+  if (startTime && endTime && hasGps) {
+    // check if assessment was captured between 8am and 3pm
+    let isCapturedTime = startTime.hours() >= 8 && endTime.hours() <= 3;
 
+    // check if assessment was captured during weekdays
+    let isDuringWeekday = startTime.weekday > 0 && startTime.weekday < 6;
+
+    // check if the difference between start time & end time of an assessment is more than 20mins
+    let isAssessmentDurationValid = endTime.diff(startTime, 'minutes') >= 20;
+
+    // check if the result contain 3 pupils assessment
+    // TODO: Figure this part out later
+    let didMoreAssessment = true;
+
+    if (isCapturedTime && isDuringWeekday && isAssessmentDurationValid && didMoreAssessment) {
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    return false;
+  }
 }
+
 exports.generateResult = generateResult;
