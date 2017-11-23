@@ -90,8 +90,10 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   if (isWorkflowIdSet && isResult) {
     // seqDoc = { last_seq: resp.seq };
     console.info('\n<<<=== START PROCESSING WORKFLOW RESULT ===>>>\n');
+    let totalResult = {};
     const workflowResult = await processWorkflowResult([resp], dbUrl);
-    const saveResponse = await dbQuery.saveResult(workflowResult, resultDbUrl);
+    workflowResult.forEach(element => totalResult = Object.assign(totalResult, element));
+    const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
     console.log(saveResponse);
     // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
     console.info('\n<<<=== END PROCESSING WORKFLOW RESULT ===>>>\n');
