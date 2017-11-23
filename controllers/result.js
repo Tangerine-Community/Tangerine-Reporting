@@ -489,6 +489,14 @@ function processGpsResult(doc, subtestCounts) {
   gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
   gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.data.timestamp).format('hh:mm');
 
+  // Added because of elastic search
+  gpsResult[`${doc.subtestId}.geoip`] = {
+    location: {
+      lon: doc.data.long,
+      lat: doc.data.lat
+    }
+  };
+
   return gpsResult;
 }
 
