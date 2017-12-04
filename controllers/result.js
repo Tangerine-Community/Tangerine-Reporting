@@ -490,7 +490,7 @@ function processGpsResult(doc, subtestCounts) {
   gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.data.timestamp).format('hh:mm');
 
   // Added because of elastic search
-  gpsResult[`${doc.subtestId}.geoip`] = {
+  gpsResult.geoip = {
     location: {
       lon: doc.data.long,
       lat: doc.data.lat
@@ -564,45 +564,48 @@ function translateGridValue(databaseValue) {
  */
 
 function validateResult(doc) {
-  let endTime, i, subtest;
+  let endTime, i, subtest, containThreePupilsAssessment, beginAssessment, endAssessment, lastSubtest;
   let startTime = moment(doc.start_time);
-  let ref = doc.subtestData;
 
-  // check if result has gps
+  // check if result has gps.
   let hasGps = doc.hasOwnProperty('longitude') && doc.hasOwnProperty('lattitude');
 
-  // check if result is complete
-  for (i = 0; i < ref.length; i++) {
-    subtest = ref[i];
-    if (subtest.prototype === "complete") {
-      console.log('result was completed');
-      endTime = moment(subtest.data.end_time);
-      break;
-    }
+  // check if assessment was completed and capture timestamps.
+  let ref = doc.subtestData;
+  let subtestLength = ref.length;
+  lastSubtest = ref[subtestLength - 1];
+  beginAssessment = moment(ref[0].data.timestamp);
+
+  if (lastSubtest.prototype !== "complete") {
+    endAssessment = moment(lastSubtest.data.timestamp);
   }
 
-  if (startTime && endTime && hasGps) {
-    // check if assessment was captured between 8am and 3pm
-    let isCapturedTime = startTime.hours() >= 8 && endTime.hours() <= 3;
+  if (lastSubtest.prototype === "complete") {
+    let newSubtest = ref[subtestLength - 2];
+    endAssessment = moment(newSubtest.data.timestamp);
+
+    // if we got here it means the assessment contain 3 pupils assessment.
+    containThreePupilsAssessment = true;
+    endTime = moment(lastSubtest.data.end_time);
+  }
+
+  // More checks for assessment validation.
+  if (hasGps && startTime && endTime) {
+    // check if assessment was captured between 7am and 3:15pm
+    let isCapturedTime = startTime.hours() >= 7 && endTime.hours() < 4 && endTime.minutes() <= 15;
 
     // check if assessment was captured during weekdays
     let isDuringWeekday = startTime.weekday > 0 && startTime.weekday < 6;
 
     // check if the difference between start time & end time of an assessment is more than 20mins
-    let isAssessmentDurationValid = endTime.diff(startTime, 'minutes') >= 20;
+    let isAssessmentDurationValid = endAssessment.diff(beginAssessment, 'minutes') >= 20;
 
-    // check if the result contain 3 pupils assessment
-    // TODO: Figure this part out later
-    let didMoreAssessment = true;
+    let isValid = isCapturedTime && isDuringWeekday && isAssessmentDurationValid && containThreePupilAssessment;
 
-    if (isCapturedTime && isDuringWeekday && isAssessmentDurationValid && didMoreAssessment) {
-      return true;
-    } else {
-      return false;
-    }
-  } else {
-    return false;
+    return isValid;
   }
+
+  return false;
 }
 
 exports.generateResult = generateResult;
