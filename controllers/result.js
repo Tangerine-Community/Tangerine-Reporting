@@ -248,7 +248,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
 
     for (doc of subtestData) {
       if (doc.prototype === 'location') {
-        let location = processLocationResult(doc, subtestCounts);
+        let location = await processLocationResult(doc, subtestCounts, dbUrl);
         result = _.assignIn(result, location);
         subtestCounts.locationCount++;
         subtestCounts.timestampCount++;
@@ -326,22 +326,20 @@ const generateResult = async function(collections, count = 0, dbUrl) {
  * @returns {Object} processed location data.
  */
 
-async function processLocationResult(body, subtestCounts) {
+async function processLocationResult(body, subtestCounts, dbUrl) {
   let count = subtestCounts.locationCount;
   let i, locationResult = {};
   let locSuffix = count > 0 ? `_${count}` : '';
-  let labels = body.data.labels;
+  let locLabels = body.data.labels;
   let location = body.data.location;
   let subtestId = body.subtestId;
+  let locationNames = await getLocationName(location, dbUrl);
 
-  locationResult.realLoc = await getLocationName(location);
-
-  for (i = 0; i < labels.length; i++) {
-    let key = `${subtestId}.${labels[i].toLowerCase()}${locSuffix}`
-    locationResult[key] = location[i].toLowerCase();
+  for (i = 0; i < locLabels.length; i++) {
+    let key = `${subtestId}.${locLabels[i].toLowerCase()}${locSuffix}`
+    locationResult[key] = locationNames[locLabels[i]].label;
   }
   locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.timestamp).format('hh:mm');
-
 
   return locationResult;
 }
@@ -558,7 +556,7 @@ function translateGridValue(databaseValue) {
 };
 
 /**
- * This function checks the validity of the document
+ * @description – This function checks the validity of the document
  * based on certain criteria.
  *
  * @param {object} doc - a result collection.
@@ -611,16 +609,34 @@ function validateResult(doc) {
   return false;
 }
 
-async function getLocationName(location) {
+
+/**
+ * @description – This function retrieves the county,
+ * subcounty, zone and school data from the location list.
+ *
+ * @param {array} location - An array of location id.
+ * @param {string} dbUrl - database base url.
+ *
+ * @returns {object} - An object containing the county,
+ *  subcounty, zone & school data.
+ */
+
+async function getLocationName(location, dbUrl) {
   let county, subcounty, zone, school;
+
+  // retrieve location-list from the base database.
   let locationList = await dbQuery.getLocationList(dbUrl);
 
+  // grab county data from location-list
   county = _.get(locationList.locations, location[0]);
 
-  for (let [subKey, val] of Object.entries(county.children)) {
-    zone =  _.get(val.children, location[1]);
+  // iterate over county data to grab zone, subcounty and school data.
+  for (let [subcountyKey, subcountyVal] of Object.entries(county.children)) {
+    zone =  _.get(subcountyVal.children, location[1]);
     if (zone) {
-      subcounty = val;
+      // if we got here it means "subcountyVal" is the subcounty data.
+      // This is because most location id doesn't always contain the subcounty id.
+      subcounty = subcountyVal;
       school = _.get(zone.children, location[2]);
       break;
     }
