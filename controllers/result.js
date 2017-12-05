@@ -326,7 +326,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
  * @returns {Object} processed location data.
  */
 
-function processLocationResult(body, subtestCounts) {
+async function processLocationResult(body, subtestCounts) {
   let count = subtestCounts.locationCount;
   let i, locationResult = {};
   let locSuffix = count > 0 ? `_${count}` : '';
@@ -334,11 +334,14 @@ function processLocationResult(body, subtestCounts) {
   let location = body.data.location;
   let subtestId = body.subtestId;
 
+  locationResult.realLoc = await getLocationName(location);
+
   for (i = 0; i < labels.length; i++) {
     let key = `${subtestId}.${labels[i].toLowerCase()}${locSuffix}`
     locationResult[key] = location[i].toLowerCase();
   }
   locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.timestamp).format('hh:mm');
+
 
   return locationResult;
 }
@@ -606,6 +609,23 @@ function validateResult(doc) {
   }
 
   return false;
+}
+
+async function getLocationName(location) {
+  let county, subcounty, zone, school;
+  let locationList = await dbQuery.getLocationList(dbUrl);
+
+  county = _.get(locationList.locations, location[0]);
+
+  for (let [subKey, val] of Object.entries(county.children)) {
+    zone =  _.get(val.children, location[1]);
+    if (zone) {
+      subcounty = val;
+      school = _.get(zone.children, location[2]);
+      break;
+    }
+  }
+  return { county, subcounty, zone, school }
 }
 
 exports.generateResult = generateResult;

@@ -356,3 +356,23 @@ exports.getUserDetails = function (enumerator, dbUrl) {
     });
   });
 }
+
+/**
+ * @description – This function retrieves location list
+ *
+ * @param {string} dbUrl - base database url.
+ *
+ * @returns {Object} - location document.
+ */
+
+exports.getLocationList = function (dbUrl) {
+  const BASE_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    BASE_DB.get('location-list', (err, body) => {
+      if (err) {
+        reject(err);
+      }
+      resolve(body);
+    });
+  });
+}
