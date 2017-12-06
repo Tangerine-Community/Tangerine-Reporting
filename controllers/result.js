@@ -335,14 +335,49 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
   let subtestId = body.subtestId;
   let locationNames = await getLocationName(location, dbUrl);
 
-  for (i = 0; i < locLabels.length; i++) {
-    let key = `${subtestId}.${locLabels[i].toLowerCase()}${locSuffix}`
-    locationResult[key] = locationNames[locLabels[i]].label;
-  }
+  locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label;
+  locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label;
+  locationResult[`${subtestId}.zone${locSuffix}`] = locationNames.zone.label;
+  locationResult[`${subtestId}.school${locSuffix}`] = locationNames.school.label;
   locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.timestamp).format('hh:mm');
 
   return locationResult;
 }
+
+/**
+ * @description – This function retrieves the county,
+ * subcounty, zone and school data from the location list.
+ *
+ * @param {array} location - An array of location id.
+ * @param {string} dbUrl - database base url.
+ *
+ * @returns {object} - An object containing the county,
+ *  subcounty, zone & school data.
+ */
+
+async function getLocationName(location, dbUrl) {
+  let county, subcounty, zone, school;
+
+  // retrieve location-list from the base database.
+  let locationList = await dbQuery.getLocationList(dbUrl);
+
+  // grab county data from location-list
+  county = _.get(locationList.locations, location[0]);
+
+  // iterate over county data to grab zone, subcounty and school data.
+  for (let [subcountyKey, subcountyVal] of Object.entries(county.children)) {
+    zone =  _.get(subcountyVal.children, location[1]);
+    if (zone) {
+      // if we got here it means "subcountyVal" is the subcounty data.
+      // This is because most location id doesn't always contain the subcounty id.
+      subcounty = subcountyVal;
+      school = _.get(zone.children, location[2]);
+      break;
+    }
+  }
+  return { county, subcounty, zone, school }
+}
+
 
 /**
  * This function processes result for a datetime prototype.
@@ -607,41 +642,6 @@ function validateResult(doc) {
   }
 
   return false;
-}
-
-
-/**
- * @description – This function retrieves the county,
- * subcounty, zone and school data from the location list.
- *
- * @param {array} location - An array of location id.
- * @param {string} dbUrl - database base url.
- *
- * @returns {object} - An object containing the county,
- *  subcounty, zone & school data.
- */
-
-async function getLocationName(location, dbUrl) {
-  let county, subcounty, zone, school;
-
-  // retrieve location-list from the base database.
-  let locationList = await dbQuery.getLocationList(dbUrl);
-
-  // grab county data from location-list
-  county = _.get(locationList.locations, location[0]);
-
-  // iterate over county data to grab zone, subcounty and school data.
-  for (let [subcountyKey, subcountyVal] of Object.entries(county.children)) {
-    zone =  _.get(subcountyVal.children, location[1]);
-    if (zone) {
-      // if we got here it means "subcountyVal" is the subcounty data.
-      // This is because most location id doesn't always contain the subcounty id.
-      subcounty = subcountyVal;
-      school = _.get(zone.children, location[2]);
-      break;
-    }
-  }
-  return { county, subcounty, zone, school }
 }
 
 exports.generateResult = generateResult;
