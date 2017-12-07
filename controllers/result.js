@@ -465,6 +465,9 @@ function processSurveyResult(body, subtestCounts) {
       surveyResult[`${body.subtestId}.${doc}`] = value;
     }
   }
+  // TODO: Uncomment when we confirm we need this.
+  // let correctPercent = Math.round(100 * body.sum.correct / body.sum.total);
+  // surveyResult[`${body.subtestId}.correct_percentage`] = `${correctPercent}%`
   surveyResult[`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(body.timestamp).format('hh:mm');
 
   return surveyResult;
@@ -485,6 +488,8 @@ function processGridResult(body, subtestCounts) {
   let subtestId = body.subtestId;
   let gridResult = {};
   let suffix = count > 0 ? `_${count}` : '';
+  let total = body.data.items.length;
+  let correctSum = 0;
 
   gridResult[`${subtestId}.${varName}_auto_stop${suffix}`] = body.data.auto_stop;
   gridResult[`${subtestId}.${varName}_time_remain${suffix}`] = body.data.time_remain;
@@ -496,7 +501,11 @@ function processGridResult(body, subtestCounts) {
   for (doc of body.data.items) {
     let gridValue = translateGridValue(doc.itemResult);
     gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = gridValue;
+    correctSum += +gridValue;
   }
+  let fluencyRate =  Math.round(correctSum / (1 - body.data.time_remain / body.data.time_allowed));
+
+  gridResult[`${subtestId}.${varName}_fluency`] = fluencyRate;
   gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(body.timestamp).format('hh:mm');
 
   return gridResult;
