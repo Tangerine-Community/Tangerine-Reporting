@@ -228,7 +228,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
     result.isValid = validateResult(collection);
     result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
     result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
-    result[`${collectionId}.enumerator${assessmentSuffix}`] = collection.enumerator;
+    result[`${collectionId}.enumerator${assessmentSuffix}`] = collection.enumerator.replace(/\s/g,'-');
     result[`${collectionId}.start_time${assessmentSuffix}`] = moment(collection.start_time).format('hh:mm');
     result[`${collectionId}.order_map${assessmentSuffix}`] = collection.order_map ? collection.order_map.join(',') : '';
 
@@ -335,10 +335,10 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
   let subtestId = body.subtestId;
   let locationNames = await getLocationName(location, dbUrl);
 
-  locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/ /g,'-');
-  locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/ /g,'-');
-  locationResult[`${subtestId}.zone${locSuffix}`] = locationNames.zone.label.replace(/ /g,'-');
-  locationResult[`${subtestId}.school${locSuffix}`] = locationNames.school.label.replace(/ /g,'-');
+  locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/\s/g,'-');
+  locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/\s/g,'-');
+  locationResult[`${subtestId}.zone${locSuffix}`] = locationNames.zone.label.replace(/\s/g,'-');
+  locationResult[`${subtestId}.school${locSuffix}`] = locationNames.school.label.replace(/\s/g,'-');
   locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.timestamp).format('hh:mm');
 
   return locationResult;
