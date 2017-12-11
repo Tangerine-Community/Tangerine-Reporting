@@ -335,10 +335,10 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
   let subtestId = body.subtestId;
   let locationNames = await getLocationName(location, dbUrl);
 
-  locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label;
-  locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label;
-  locationResult[`${subtestId}.zone${locSuffix}`] = locationNames.zone.label;
-  locationResult[`${subtestId}.school${locSuffix}`] = locationNames.school.label;
+  locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/ /g,'-');
+  locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/ /g,'-');
+  locationResult[`${subtestId}.zone${locSuffix}`] = locationNames.zone.label.replace(/ /g,'-');
+  locationResult[`${subtestId}.school${locSuffix}`] = locationNames.school.label.replace(/ /g,'-');
   locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.timestamp).format('hh:mm');
 
   return locationResult;
@@ -505,7 +505,7 @@ function processGridResult(body, subtestCounts) {
   }
   let fluencyRate =  Math.round(correctSum / (1 - body.data.time_remain / body.data.time_allowed));
 
-  gridResult[`${subtestId}.${varName}_fluency`] = fluencyRate;
+  gridResult[`${subtestId}.fluency_rate`] = fluencyRate;
   gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(body.timestamp).format('hh:mm');
 
   return gridResult;
