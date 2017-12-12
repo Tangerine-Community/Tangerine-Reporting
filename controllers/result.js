@@ -225,7 +225,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
       result.indexKeys = indexKeys;
     }
 
-    result.isValid = validateResult(collection);
+    result.isValid = await validateResult(collection, dbUrl);
     result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
     result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
     result[`${collectionId}.enumerator${assessmentSuffix}`] = collection.enumerator.replace(/\s/g,'-');
@@ -608,12 +608,21 @@ function translateGridValue(databaseValue) {
  * @returns {boolean} - result validity
  */
 
-function validateResult(doc) {
-  let endTime, i, subtest, containThreePupilsAssessment, beginAssessment, endAssessment, lastSubtest;
+async function validateResult(doc, dbUrl) {
+  let endTime, i, subtest, beginAssessment, endAssessment, lastSubtest;
   let startTime = moment(doc.start_time);
+  let docId = doc.workflowId || doc.assessmentId || doc.curriculumId;
+  let collection = await dbQuery.retrieveDoc(docId, dbUrl);
+  let validationParams = collection.authenticityParameters;
+  let instrumentConstraints = validationParams && validationParams.constraints;
 
+  if (!(validationParams && validationParams.enabled)) {
+    return true;
+  }
+
+  // TODO: Uncomment when GPS constraint is required.
   // check if result has gps.
-  let hasGps = doc.hasOwnProperty('longitude') && doc.hasOwnProperty('lattitude');
+  // let hasGps = doc.hasOwnProperty('longitude') && doc.hasOwnProperty('lattitude');
 
   // check if assessment was completed and capture timestamps.
   let ref = doc.subtestData;
@@ -628,26 +637,25 @@ function validateResult(doc) {
   if (lastSubtest.prototype === "complete") {
     let newSubtest = ref[subtestLength - 2];
     endAssessment = moment(newSubtest.data.timestamp);
-
-    // if we got here it means the assessment contain 3 pupils assessment.
-    containThreePupilsAssessment = true;
     endTime = moment(lastSubtest.data.end_time);
   }
 
   // More checks for assessment validation.
-  if (hasGps && startTime && endTime) {
-    // check if assessment was captured between 7am and 3:15pm
-    let isCapturedTime = startTime.hours() >= 7 && endTime.hours() < 4 && endTime.minutes() <= 15;
+  if (startTime && endTime) {
+    // check if assessment was captured between the given hours.
+    let isStartTimeValid = startTime.hours() >= instrumentConstraints.timeOfDay.startTime.hour
+    let isEndTimeValid = endTime.hours() <= (instrumentConstraints.timeOfDay.endTime.hour - 12);
 
-    // check if assessment was captured during weekdays
-    let isDuringWeekday = startTime.weekday > 0 && startTime.weekday < 6;
+    let isCapturedTimeValid = isStartTimeValid && isEndTimeValid;
 
-    // check if the difference between start time & end time of an assessment is more than 20mins
-    let isAssessmentDurationValid = endAssessment.diff(beginAssessment, 'minutes') >= 20;
+    // TODO: Uncomment when weekday constraint is required.
+    // check if assessment was captured during weekdays.
+    // let isDuringWeekday = startTime.weekday > 0 && startTime.weekday < 6;
 
-    let isValid = isCapturedTime && isDuringWeekday && isAssessmentDurationValid && containThreePupilAssessment;
+    // check if the difference between start time & end time of an assessment is more than a given duration
+    let isDurationValid = endAssessment.diff(beginAssessment, 'minutes') >= instrumentConstraints.duration.minutes;
 
-    return isValid;
+    return isCapturedTimeValid && isDurationValid;
   }
 
   return false;
