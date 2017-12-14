@@ -169,10 +169,10 @@ exports.saveResult = (doc, dbUrl) => {
 
   let docObj = {
     parent_id: cloneDoc.indexKeys.parent_id,
-    result_year: cloneDoc.indexKeys.year,
-    result_month: cloneDoc.indexKeys.month,
-    result_day : cloneDoc.indexKeys.day,
     result_time : cloneDoc.indexKeys.time,
+    result_day : cloneDoc.indexKeys.day,
+    result_month: cloneDoc.indexKeys.month,
+    result_year: cloneDoc.indexKeys.year,
     processed_results: doc
   };
 

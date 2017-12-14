@@ -330,10 +330,9 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
   let count = subtestCounts.locationCount;
   let i, locationResult = {};
   let locSuffix = count > 0 ? `_${count}` : '';
-  let locLabels = body.data.labels;
-  let location = body.data.location;
+  let locationData = body.data;
   let subtestId = body.subtestId;
-  let locationNames = await getLocationName(location, dbUrl);
+  let locationNames = await getLocationName(locationData, dbUrl);
 
   locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/\s/g,'-');
   locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/\s/g,'-');
@@ -348,33 +347,56 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
  * @description – This function retrieves the county,
  * subcounty, zone and school data from the location list.
  *
- * @param {array} location - An array of location id.
+ * @param {array} locationData - An array of location id.
  * @param {string} dbUrl - database base url.
  *
  * @returns {object} - An object containing the county,
  *  subcounty, zone & school data.
  */
 
-async function getLocationName(location, dbUrl) {
-  let county, subcounty, zone, school;
+async function getLocationName(locationData, dbUrl) {
+  let i, county, subcounty, zone, school, locNames = {};
 
   // retrieve location-list from the base database.
   let locationList = await dbQuery.getLocationList(dbUrl);
 
-  // grab county data from location-list
-  county = _.get(locationList.locations, location[0]);
+  let levels = locationList.locationsLevels;
+  let locLabels = locationData.labels;
+  let locIds = locationData.location;
 
-  // iterate over county data to grab zone, subcounty and school data.
-  for (let [subcountyKey, subcountyVal] of Object.entries(county.children)) {
-    zone =  _.get(subcountyVal.children, location[1]);
-    if (zone) {
-      // if we got here it means "subcountyVal" is the subcounty data.
-      // This is because most location id doesn't always contain the subcounty id.
-      subcounty = subcountyVal;
-      school = _.get(zone.children, location[2]);
+  for (i = 0; i < levels.length; i++) {
+    county = _.get(locationList.locations, locIds[i]);
+    if (county) {
+      subcounty = _.get(county.children, locIds[i+1]);
+      if (!subcounty) {
+        for (let [subcountyKey, subcountyVal] of Object.entries(county.children)) {
+          zone =  _.get(subcountyVal.children, locIds[i+1]);
+          if (zone) {
+            subcounty = subcountyVal;
+            school = _.get(zone.children, locIds[i+2]);
+            break;
+          } else {
+            for (let [zoneKey, zoneVal] of Object.entries(county.children)) {
+              school = _.get(zone.children, locIds[i+3]);
+              if (zone) {
+                subcounty = subcountyVal;
+                school = _.get(zone.children, locIds[i+3]);
+                break;
+              }
+            }
+          }
+        }
+      }
+      else {
+        zone = _.get(subcounty.children, locIds[i+2]);
+        if (zone) {
+          school = _.get(zone.children, locIds[i+3]);
+        }
+      }
       break;
     }
   }
+
   return { county, subcounty, zone, school }
 }
 
