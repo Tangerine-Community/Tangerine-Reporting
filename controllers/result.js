@@ -347,7 +347,7 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
  * @description – This function retrieves the county,
  * subcounty, zone and school data from the location list.
  *
- * @param {array} locationData - An array of location id.
+ * @param {object} locationData - subtest location details.
  * @param {string} dbUrl - database base url.
  *
  * @returns {object} - An object containing the county,
@@ -355,49 +355,51 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
  */
 
 async function getLocationName(locationData, dbUrl) {
-  let i, county, subcounty, zone, school, locNames = {};
+  let i, locNames = {};
+  let locIds = locationData.location;
 
   // retrieve location-list from the base database.
   let locationList = await dbQuery.getLocationList(dbUrl);
-
   let levels = locationList.locationsLevels;
-  let locLabels = locationData.labels;
-  let locIds = locationData.location;
 
   for (i = 0; i < levels.length; i++) {
-    county = _.get(locationList.locations, locIds[i]);
-    if (county) {
-      subcounty = _.get(county.children, locIds[i+1]);
-      if (!subcounty) {
-        for (let [subcountyKey, subcountyVal] of Object.entries(county.children)) {
-          zone =  _.get(subcountyVal.children, locIds[i+1]);
-          if (zone) {
-            subcounty = subcountyVal;
-            school = _.get(zone.children, locIds[i+2]);
+    locNames[levels[i]] = _.get(locationList.locations, locIds[i]);
+
+    if (locNames[levels[i]]) {
+      locNames[levels[i+1]] = _.get(locNames[levels[i]].children, locIds[i+1]);
+
+      if (!locNames[levels[i+1]]) {
+        for (let [key, val] of Object.entries(locNames[levels[i]].children)) {
+          locNames[levels[i+2]] =  _.get(val.children, locIds[i+1]);
+
+          if (locNames[levels[i+2]]) {
+            locNames[levels[i+1]] = val;
+            locNames[levels[i+3]] = _.get(locNames[levels[i+2]].children, locIds[i+2]);
             break;
           } else {
-            for (let [zoneKey, zoneVal] of Object.entries(county.children)) {
-              school = _.get(zone.children, locIds[i+3]);
-              if (zone) {
-                subcounty = subcountyVal;
-                school = _.get(zone.children, locIds[i+3]);
+
+            for (let [prop, value] of Object.entries(locNames[levels[i]].children)) {
+              locNames[levels[i+3]] = _.get(value.children, locIds[i+1]);
+
+              if (locNames[levels[i+3]]) {
+                locNames[levels[i+2]] = value;
+                locNames[levels[i+1]] = val;
                 break;
               }
             }
           }
         }
-      }
-      else {
-        zone = _.get(subcounty.children, locIds[i+2]);
-        if (zone) {
-          school = _.get(zone.children, locIds[i+3]);
+      } else {
+        locNames[locLabels[i+2]] = _.get(locNames[locLabels[i+1]].children, locIds[i+2]);
+        if (locNames[locLabels[i+2]]) {
+          locNames[locLabels[i+3]] = _.get(locNames[locLabels[i+2]].children, locIds[i+3]);
         }
       }
       break;
     }
   }
 
-  return { county, subcounty, zone, school }
+  return locNames;
 }
 
 
