@@ -211,9 +211,14 @@ exports.getSubtests = (id, dbUrl) => {
       if (err) {
         reject(err);
       }
-      let subtestDoc = _.map(body.rows, (data) => data.doc);
-      let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
-      resolve(orderedSubtests);
+      if (body && body.rows) {
+        let subtestDoc = _.map(body.rows, (data) => data.doc);
+        let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
+        resolve(orderedSubtests);
+      }
+      else {
+        resolve(body);
+      }
     })
   });
 }

@@ -213,7 +213,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
   for (let [index, data] of resultCollections.entries()) {
     let collection = data.doc;
     let collectionId = collection.workflowId || collection.assessmentId || collection.curriculumId;
-    enumeratorName = collection.enumerator;
+    enumeratorName = collection.enumerator || collection.editedBy;
 
     if (index === 0) {
       indexKeys.parent_id = collectionId;
@@ -228,7 +228,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
     result.isValid = await validateResult(collection, dbUrl);
     result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
     result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
-    result[`${collectionId}.enumerator${assessmentSuffix}`] = collection.enumerator.replace(/\s/g,'-');
+    result[`${collectionId}.enumerator${assessmentSuffix}`] = enumeratorName.replace(/\s/g,'-');
     result[`${collectionId}.start_time${assessmentSuffix}`] = moment(collection.start_time).format('hh:mm');
     result[`${collectionId}.order_map${assessmentSuffix}`] = collection.order_map ? collection.order_map.join(',') : '';
 
@@ -243,60 +243,62 @@ const generateResult = async function(collections, count = 0, dbUrl) {
       gridCount: 0,
       timestampCount: 0
     };
-
     let subtestData = _.isArray(collection.subtestData) ? collection.subtestData : [collection.subtestData];
 
-    for (doc of subtestData) {
-      if (doc.prototype === 'location') {
-        let location = await processLocationResult(doc, subtestCounts, dbUrl);
-        result = _.assignIn(result, location);
-        subtestCounts.locationCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'datetime') {
-        let datetime = processDatetimeResult(doc, subtestCounts);
-        result = _.assignIn(result, datetime);
-        subtestCounts.datetimeCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'consent') {
-        let consent = processConsentResult(doc, subtestCounts);
-        result = _.assignIn(result, consent);
-        subtestCounts.consentCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'id') {
-        let id = processIDResult(doc, subtestCounts);
-        result = _.assignIn(result, id);
-        subtestCounts.idCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'survey') {
-        let survey = processSurveyResult(doc, subtestCounts);
-        result = _.assignIn(result, survey);
-        subtestCounts.surveyCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'grid') {
-        let grid = processGridResult(doc, subtestCounts);
-        result = _.assignIn(result, grid);
-        subtestCounts.gridCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'gps') {
-        let gps = processGpsResult(doc, subtestCounts);
-        result = _.assignIn(result, gps);
-        subtestCounts.gpsCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'camera') {
-        let camera = processCamera(doc, subtestCounts);
-        result = _.assignIn(result, camera);
-        subtestCounts.cameraCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'complete') {
-        result[`${collectionId}.end_time${assessmentSuffix}`] = moment(doc.data.end_time).format('hh:mm');
+    if (subtestData[0] !== undefined) {
+      for (doc of subtestData) {
+        if (doc.prototype === 'location') {
+          doc.enumerator = enumeratorName;
+          let location = await processLocationResult(doc, subtestCounts, dbUrl);
+          result = _.assignIn(result, location);
+          subtestCounts.locationCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'datetime') {
+          let datetime = processDatetimeResult(doc, subtestCounts);
+          result = _.assignIn(result, datetime);
+          subtestCounts.datetimeCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'consent') {
+          let consent = processConsentResult(doc, subtestCounts);
+          result = _.assignIn(result, consent);
+          subtestCounts.consentCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'id') {
+          let id = processIDResult(doc, subtestCounts);
+          result = _.assignIn(result, id);
+          subtestCounts.idCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'survey') {
+          let survey = processSurveyResult(doc, subtestCounts);
+          result = _.assignIn(result, survey);
+          subtestCounts.surveyCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'grid') {
+          let grid = processGridResult(doc, subtestCounts);
+          result = _.assignIn(result, grid);
+          subtestCounts.gridCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'gps') {
+          let gps = processGpsResult(doc, subtestCounts);
+          result = _.assignIn(result, gps);
+          subtestCounts.gpsCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'camera') {
+          let camera = processCamera(doc, subtestCounts);
+          result = _.assignIn(result, camera);
+          subtestCounts.cameraCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'complete') {
+          result[`${collectionId}.end_time${assessmentSuffix}`] = moment(doc.data.end_time).format('hh:mm');
+        }
       }
     }
   }
@@ -305,8 +307,8 @@ const generateResult = async function(collections, count = 0, dbUrl) {
   let userDetails = await dbQuery.getUserDetails(username, dbUrl);
   result.userRole = userDetails.role;
   result.mPesaNumber = userDetails.mPesaNumber;
-  result.phoneNumber = userDetails.phoneNumber;
-  result.fullName = `${userDetails.firstName} ${userDetails.lastName}`;
+  result.phoneNumber = userDetails.phoneNumber || userDetails.phone;
+  result.fullName = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
 
   return result;
 }
@@ -330,9 +332,8 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
   let count = subtestCounts.locationCount;
   let i, locationResult = {};
   let locSuffix = count > 0 ? `_${count}` : '';
-  let locationData = body.data;
   let subtestId = body.subtestId;
-  let locationNames = await getLocationName(locationData, dbUrl);
+  let locationNames = await getLocationName(body, dbUrl);
 
   locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/\s/g,'-');
   locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/\s/g,'-');
@@ -347,20 +348,40 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
  * @description – This function retrieves the county,
  * subcounty, zone and school data from the location list.
  *
- * @param {object} locationData - subtest location details.
+ * @param {object} body - subtest location details.
  * @param {string} dbUrl - database base url.
  *
  * @returns {object} - An object containing the county,
  *  subcounty, zone & school data.
  */
 
-async function getLocationName(locationData, dbUrl) {
-  let i, locNames = {};
-  let locIds = locationData.location;
+async function getLocationName(body, dbUrl) {
+  let i, j, locNames = {};
+  let locIds = [];
+  let schoolId = body.data.schoolId;
 
   // retrieve location-list from the base database.
   let locationList = await dbQuery.getLocationList(dbUrl);
   let levels = locationList.locationsLevels;
+
+  if (schoolId) {
+    let username = `user-${body.enumerator}`;
+    let userDetails = await dbQuery.getUserDetails(username, dbUrl);
+
+    for (let [label, id] of Object.entries(userDetails.location)) {
+      for (let j = 0; j < levels.length; j++) {
+        if (label == levels[j]) {
+          locIds.push(id);
+          break;
+        }
+      }
+    }
+    if (locIds.length < levels.length) {
+      locIds.push(schoolId);
+    }
+  } else {
+    locIds = body.data.location;
+  }
 
   for (i = 0; i < levels.length; i++) {
     locNames[levels[i]] = _.get(locationList.locations, locIds[i]);
@@ -649,18 +670,18 @@ async function validateResult(doc, dbUrl) {
   // let hasGps = doc.hasOwnProperty('longitude') && doc.hasOwnProperty('lattitude');
 
   // check if assessment was completed and capture timestamps.
-  let ref = doc.subtestData;
+  let ref = _.isArray(doc.subtestData) ? doc.subtestData : [doc.subtestData];
   let subtestLength = ref.length;
   lastSubtest = ref[subtestLength - 1];
-  beginAssessment = moment(ref[0].data.timestamp);
+  beginAssessment = moment(ref[0].timestamp);
 
   if (lastSubtest.prototype !== "complete") {
-    endAssessment = moment(lastSubtest.data.timestamp);
+    endAssessment = moment(lastSubtest.timestamp);
   }
 
   if (lastSubtest.prototype === "complete") {
     let newSubtest = ref[subtestLength - 2];
-    endAssessment = moment(newSubtest.data.timestamp);
+    endAssessment = moment(newSubtest.timestamp);
     endTime = moment(lastSubtest.data.end_time);
   }
 
