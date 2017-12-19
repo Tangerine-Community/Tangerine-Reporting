@@ -356,8 +356,7 @@ async function processLocationResult(body, subtestCounts, dbUrl) {
  */
 
 async function getLocationName(body, dbUrl) {
-  let i, j, locNames = {};
-  let locIds = [];
+  let i, j, locNames = {}, locIds = [];
   let schoolId = body.data.schoolId;
 
   // retrieve location-list from the base database.
@@ -368,8 +367,8 @@ async function getLocationName(body, dbUrl) {
     let username = `user-${body.enumerator}`;
     let userDetails = await dbQuery.getUserDetails(username, dbUrl);
 
-    for (let [label, id] of Object.entries(userDetails.location)) {
-      for (let j = 0; j < levels.length; j++) {
+    for (const [label, id] of Object.entries(userDetails.location)) {
+      for (j = 0; j < levels.length; j++) {
         if (label == levels[j]) {
           locIds.push(id);
           break;
@@ -390,7 +389,7 @@ async function getLocationName(body, dbUrl) {
       locNames[levels[i+1]] = _.get(locNames[levels[i]].children, locIds[i+1]);
 
       if (!locNames[levels[i+1]]) {
-        for (let [key, val] of Object.entries(locNames[levels[i]].children)) {
+        for (const [key, val] of Object.entries(locNames[levels[i]].children)) {
           locNames[levels[i+2]] =  _.get(val.children, locIds[i+1]);
 
           if (locNames[levels[i+2]]) {
@@ -399,7 +398,7 @@ async function getLocationName(body, dbUrl) {
             break;
           } else {
 
-            for (let [prop, value] of Object.entries(locNames[levels[i]].children)) {
+            for (const [prop, value] of Object.entries(locNames[levels[i]].children)) {
               locNames[levels[i+3]] = _.get(value.children, locIds[i+1]);
 
               if (locNames[levels[i+3]]) {
