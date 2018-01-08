@@ -169,9 +169,10 @@ exports.saveResult = (doc, dbUrl) => {
 
   let docObj = {
     parent_id: cloneDoc.indexKeys.parent_id,
-    result_year: cloneDoc.indexKeys.year,
+    result_time : cloneDoc.indexKeys.time,
+    result_day : cloneDoc.indexKeys.day,
     result_month: cloneDoc.indexKeys.month,
-    result_day: cloneDoc.indexKeys.day,
+    result_year: cloneDoc.indexKeys.year,
     processed_results: doc
   };
 
@@ -210,9 +211,14 @@ exports.getSubtests = (id, dbUrl) => {
       if (err) {
         reject(err);
       }
-      let subtestDoc = _.map(body.rows, (data) => data.doc);
-      let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
-      resolve(orderedSubtests);
+      if (body && body.rows) {
+        let subtestDoc = _.map(body.rows, (data) => data.doc);
+        let orderedSubtests = _.sortBy(subtestDoc, ['assessmentId', 'order']);
+        resolve(orderedSubtests);
+      }
+      else {
+        resolve(body);
+      }
     })
   });
 }
@@ -331,5 +337,47 @@ exports.processedResultsById = function (req, res) {
       res.send(err);
     }
     res.json(body.rows);
+  });
+}
+
+
+/**
+ * @description – This function retrieves enumerator information.
+ *
+ * @param {string} enumerator - name of the enumerator.
+ * @param {string} dbUrl - base database url.
+ *
+ * @returns {Object} - user document.
+ */
+
+exports.getUserDetails = function (enumerator, dbUrl) {
+  const BASE_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    BASE_DB.get(enumerator, (err, body) => {
+      if (err) {
+        reject(err);
+      }
+      resolve(body);
+    });
+  });
+}
+
+/**
+ * @description – This function retrieves location list
+ *
+ * @param {string} dbUrl - base database url.
+ *
+ * @returns {Object} - location document.
+ */
+
+exports.getLocationList = function (dbUrl) {
+  const BASE_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    BASE_DB.get('location-list', (err, body) => {
+      if (err) {
+        reject(err);
+      }
+      resolve(body);
+    });
   });
 }

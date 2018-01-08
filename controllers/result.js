@@ -11,6 +11,8 @@
 
 const _ = require('lodash');
 const nano = require('nano');
+const moment = require('moment');
+moment().format();
 
 /**
  * Local dependencies.
@@ -131,7 +133,7 @@ exports.processResult = (req, res) => {
   dbQuery.retrieveDoc(docId, dbUrl)
     .then(async(data) => {
       let resultDoc = { doc: data };
-      const result = generateResult(resultDoc);
+      const result = await generateResult(resultDoc, 0, dbUrl);
       const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
       res.json(saveResponse);
     })
@@ -201,27 +203,33 @@ exports.processAll = (req, res) => {
  * @returns {Object} - processed result for csv.
  */
 
-const generateResult = function(collections, count = 0) {
+const generateResult = async function(collections, count = 0, dbUrl) {
+  let enumeratorName;
   let result = {};
   let indexKeys = {};
   let assessmentSuffix = count > 0 ? `_${count}` : '';
-  collections = _.isArray(collections) ? collections : [collections];
+  let resultCollections = _.isArray(collections) ? collections : [collections];
 
-  for (let [index, data] of collections.entries()) {
+  for (let [index, data] of resultCollections.entries()) {
     let collection = data.doc;
     let collectionId = collection.workflowId || collection.assessmentId || collection.curriculumId;
+    enumeratorName = collection.enumerator || collection.editedBy;
+
     if (index === 0) {
-      indexKeys.year = new Date(collection.start_time).getFullYear().toString();
-      indexKeys.month = new Date(collection.start_time).toLocaleString('en-GB', { month: 'short' });
-      indexKeys.day = new Date(collection.start_time).getDay().toString();
       indexKeys.parent_id = collectionId;
       indexKeys.ref = collection.workflowId ? collection.tripId : collection._id;
+      indexKeys.year = moment(collection.start_time).year();
+      indexKeys.month = moment(collection.start_time).format('MMM');
+      indexKeys.day = moment(collection.start_time).day();
+      indexKeys.time = moment(collection.start_time).format('hh:mm');
       result.indexKeys = indexKeys;
     }
+
+    result.isValid = await validateResult(collection, dbUrl);
     result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
     result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
-    result[`${collectionId}.enumerator${assessmentSuffix}`] = collection.enumerator;
-    result[`${collectionId}.start_time${assessmentSuffix}`] = collection.start_time;
+    result[`${collectionId}.enumerator${assessmentSuffix}`] = enumeratorName.replace(/\s/g,'-');
+    result[`${collectionId}.start_time${assessmentSuffix}`] = moment(collection.start_time).format('hh:mm');
     result[`${collectionId}.order_map${assessmentSuffix}`] = collection.order_map ? collection.order_map.join(',') : '';
 
     let subtestCounts = {
@@ -235,63 +243,73 @@ const generateResult = function(collections, count = 0) {
       gridCount: 0,
       timestampCount: 0
     };
-
     let subtestData = _.isArray(collection.subtestData) ? collection.subtestData : [collection.subtestData];
 
-    for (doc of subtestData) {
-      if (doc.prototype === 'location') {
-        let location = processLocationResult(doc, subtestCounts);
-        result = _.assignIn(result, location);
-        subtestCounts.locationCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'datetime') {
-        let datetime = processDatetimeResult(doc, subtestCounts);
-        result = _.assignIn(result, datetime);
-        subtestCounts.datetimeCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'consent') {
-        let consent = processConsentResult(doc, subtestCounts);
-        result = _.assignIn(result, consent);
-        subtestCounts.consentCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'id') {
-        let id = processIDResult(doc, subtestCounts);
-        result = _.assignIn(result, id);
-        subtestCounts.idCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'survey') {
-        let survey = processSurveyResult(doc, subtestCounts);
-        result = _.assignIn(result, survey);
-        subtestCounts.surveyCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'grid') {
-        let grid = processGridResult(doc, subtestCounts);
-        result = _.assignIn(result, grid);
-        subtestCounts.gridCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'gps') {
-        let gps = processGpsResult(doc, subtestCounts);
-        result = _.assignIn(result, gps);
-        subtestCounts.gpsCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'camera') {
-        let camera = processCamera(doc, subtestCounts);
-        result = _.assignIn(result, camera);
-        subtestCounts.cameraCount++;
-        subtestCounts.timestampCount++;
-      }
-      if (doc.prototype === 'complete') {
-        result[`${collectionId}.end_time${assessmentSuffix}`] = doc.data.end_time;
+    if (subtestData[0] !== undefined) {
+      for (doc of subtestData) {
+        if (doc.prototype === 'location') {
+          doc.enumerator = enumeratorName;
+          let location = await processLocationResult(doc, subtestCounts, dbUrl);
+          result = _.assignIn(result, location);
+          subtestCounts.locationCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'datetime') {
+          let datetime = processDatetimeResult(doc, subtestCounts);
+          result = _.assignIn(result, datetime);
+          subtestCounts.datetimeCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'consent') {
+          let consent = processConsentResult(doc, subtestCounts);
+          result = _.assignIn(result, consent);
+          subtestCounts.consentCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'id') {
+          let id = processIDResult(doc, subtestCounts);
+          result = _.assignIn(result, id);
+          subtestCounts.idCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'survey') {
+          let survey = processSurveyResult(doc, subtestCounts);
+          result = _.assignIn(result, survey);
+          subtestCounts.surveyCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'grid') {
+          let grid = processGridResult(doc, subtestCounts);
+          result = _.assignIn(result, grid);
+          subtestCounts.gridCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'gps') {
+          let gps = processGpsResult(doc, subtestCounts);
+          result = _.assignIn(result, gps);
+          subtestCounts.gpsCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'camera') {
+          let camera = processCamera(doc, subtestCounts);
+          result = _.assignIn(result, camera);
+          subtestCounts.cameraCount++;
+          subtestCounts.timestampCount++;
+        }
+        if (doc.prototype === 'complete') {
+          result[`${collectionId}.end_time${assessmentSuffix}`] = moment(doc.data.end_time).format('hh:mm');
+        }
       }
     }
   }
+
+  let username = `user-${enumeratorName}`;
+  let userDetails = await dbQuery.getUserDetails(username, dbUrl);
+  result.userRole = userDetails.role;
+  result.mPesaNumber = userDetails.mPesaNumber;
+  result.phoneNumber = userDetails.phoneNumber || userDetails.phone;
+  result.fullName = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
+
   return result;
 }
 
@@ -310,22 +328,100 @@ const generateResult = function(collections, count = 0) {
  * @returns {Object} processed location data.
  */
 
-function processLocationResult(body, subtestCounts) {
+async function processLocationResult(body, subtestCounts, dbUrl) {
   let count = subtestCounts.locationCount;
   let i, locationResult = {};
   let locSuffix = count > 0 ? `_${count}` : '';
-  let labels = body.data.labels;
-  let location = body.data.location;
   let subtestId = body.subtestId;
+  let locationNames = await getLocationName(body, dbUrl);
 
-  for (i = 0; i < labels.length; i++) {
-    let key = `${subtestId}.${labels[i].toLowerCase()}${locSuffix}`
-    locationResult[key] = location[i].toLowerCase();
-  }
-  locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.timestamp;
+  locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/\s/g,'-');
+  locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/\s/g,'-');
+  locationResult[`${subtestId}.zone${locSuffix}`] = locationNames.zone.label.replace(/\s/g,'-');
+  locationResult[`${subtestId}.school${locSuffix}`] = locationNames.school.label.replace(/\s/g,'-');
+  locationResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.timestamp).format('hh:mm');
 
   return locationResult;
 }
+
+/**
+ * @description – This function retrieves the county,
+ * subcounty, zone and school data from the location list.
+ *
+ * @param {object} body - subtest location details.
+ * @param {string} dbUrl - database base url.
+ *
+ * @returns {object} - An object containing the county,
+ *  subcounty, zone & school data.
+ */
+
+async function getLocationName(body, dbUrl) {
+  let i, j, locNames = {}, locIds = [];
+  let schoolId = body.data.schoolId;
+
+  // retrieve location-list from the base database.
+  let locationList = await dbQuery.getLocationList(dbUrl);
+  let levels = locationList.locationsLevels;
+
+  if (schoolId) {
+    let username = `user-${body.enumerator}`;
+    let userDetails = await dbQuery.getUserDetails(username, dbUrl);
+
+    for (const [label, id] of Object.entries(userDetails.location)) {
+      for (j = 0; j < levels.length; j++) {
+        if (label == levels[j]) {
+          locIds.push(id);
+          break;
+        }
+      }
+    }
+    if (locIds.length < levels.length) {
+      locIds.push(schoolId);
+    }
+  } else {
+    locIds = body.data.location;
+  }
+
+  for (i = 0; i < levels.length; i++) {
+    locNames[levels[i]] = _.get(locationList.locations, locIds[i]);
+
+    if (locNames[levels[i]]) {
+      locNames[levels[i+1]] = _.get(locNames[levels[i]].children, locIds[i+1]);
+
+      if (!locNames[levels[i+1]]) {
+        for (const [key, val] of Object.entries(locNames[levels[i]].children)) {
+          locNames[levels[i+2]] =  _.get(val.children, locIds[i+1]);
+
+          if (locNames[levels[i+2]]) {
+            locNames[levels[i+1]] = val;
+            locNames[levels[i+3]] = _.get(locNames[levels[i+2]].children, locIds[i+2]);
+            break;
+          } else {
+
+            for (const [prop, value] of Object.entries(locNames[levels[i]].children)) {
+              locNames[levels[i+3]] = _.get(value.children, locIds[i+1]);
+
+              if (locNames[levels[i+3]]) {
+                locNames[levels[i+2]] = value;
+                locNames[levels[i+1]] = val;
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        locNames[locLabels[i+2]] = _.get(locNames[locLabels[i+1]].children, locIds[i+2]);
+        if (locNames[locLabels[i+2]]) {
+          locNames[locLabels[i+3]] = _.get(locNames[locLabels[i+2]].children, locIds[i+3]);
+        }
+      }
+      break;
+    }
+  }
+
+  return locNames;
+}
+
 
 /**
  * This function processes result for a datetime prototype.
@@ -344,7 +440,7 @@ function processDatetimeResult(body, subtestCounts) {
     [`${body.subtestId}.month${suffix}`]: body.data.month,
     [`${body.subtestId}.day${suffix}`]: body.data.day,
     [`${body.subtestId}.assess_time${suffix}`]: body.data.time,
-    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: moment(body.timestamp).format('hh:mm')
   }
   return datetimeResult;
 }
@@ -363,7 +459,7 @@ function processConsentResult(body, subtestCounts) {
   let suffix = count > 0 ? `_${count}` : '';
   consentResult = {
     [`${body.subtestId}.consent${suffix}`]: body.data.consent,
-    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: moment(body.timestamp).format('hh:mm')
   };
   return consentResult;
 }
@@ -382,7 +478,7 @@ function processIDResult(body, subtestCounts) {
   let suffix = count > 0 ? `_${count}` : '';
   idResult = {
     [`${body.subtestId}.id${suffix}`]: body.data.participant_id,
-    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: body.timestamp
+    [`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`]: moment(body.timestamp).format('hh:mm')
   };
   return idResult;
 }
@@ -413,7 +509,10 @@ function processSurveyResult(body, subtestCounts) {
       surveyResult[`${body.subtestId}.${doc}`] = value;
     }
   }
-  surveyResult[`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
+  // TODO: Uncomment when we confirm we need this.
+  // let correctPercent = Math.round(100 * body.sum.correct / body.sum.total);
+  // surveyResult[`${body.subtestId}.correct_percentage`] = `${correctPercent}%`
+  surveyResult[`${body.subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(body.timestamp).format('hh:mm');
 
   return surveyResult;
 }
@@ -433,6 +532,8 @@ function processGridResult(body, subtestCounts) {
   let subtestId = body.subtestId;
   let gridResult = {};
   let suffix = count > 0 ? `_${count}` : '';
+  let total = body.data.items.length;
+  let correctSum = 0;
 
   gridResult[`${subtestId}.${varName}_auto_stop${suffix}`] = body.data.auto_stop;
   gridResult[`${subtestId}.${varName}_time_remain${suffix}`] = body.data.time_remain;
@@ -444,8 +545,12 @@ function processGridResult(body, subtestCounts) {
   for (doc of body.data.items) {
     let gridValue = translateGridValue(doc.itemResult);
     gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = gridValue;
+    correctSum += +gridValue;
   }
-  gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = body.timestamp;
+  let fluencyRate =  Math.round(correctSum / (1 - body.data.time_remain / body.data.time_allowed));
+
+  gridResult[`${subtestId}.fluency_rate`] = fluencyRate;
+  gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(body.timestamp).format('hh:mm');
 
   return gridResult;
 }
@@ -471,7 +576,15 @@ function processGpsResult(doc, subtestCounts) {
   gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altAcc;
   gpsResult[`${doc.subtestId}.heading${suffix}`] = doc.data.heading;
   gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
-  gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = doc.data.timestamp;
+  gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.data.timestamp).format('hh:mm');
+
+  // Added because of elastic search
+  gpsResult.geoip = {
+    location: {
+      lon: doc.data.long,
+      lat: doc.data.lat
+    }
+  };
 
   return gpsResult;
 }
@@ -493,7 +606,7 @@ function processCamera(body, subtestCounts) {
 
   cameraResult[`${body.subtestId}.${varName}_photo_captured${suffix}`] = body.data.imageBase64;
   cameraResult[`${body.subtestId}.${varName}_photo_url${suffix}`] = body.data.imageBase64;
-  cameraResult[`${body.subtestId}.timestamp_${subtestsCount.timestampCount}`] = body.timestamp;
+  cameraResult[`${body.subtestId}.timestamp_${subtestsCount.timestampCount}`] = moment(body.timestamp).format('hh:mm');
 
   return cameraResult;
 }
@@ -529,5 +642,67 @@ function translateGridValue(databaseValue) {
   }
   return gridValueMap[databaseValue] || String(databaseValue);
 };
+
+/**
+ * @description – This function checks the validity of the document
+ * based on certain criteria.
+ *
+ * @param {object} doc - a result collection.
+ *
+ * @returns {boolean} - result validity
+ */
+
+async function validateResult(doc, dbUrl) {
+  let endTime, i, subtest, beginAssessment, endAssessment, lastSubtest;
+  let startTime = moment(doc.start_time);
+  let docId = doc.workflowId || doc.assessmentId || doc.curriculumId;
+  let collection = await dbQuery.retrieveDoc(docId, dbUrl);
+  let validationParams = collection.authenticityParameters;
+  let instrumentConstraints = validationParams && validationParams.constraints;
+
+  if (!(validationParams && validationParams.enabled)) {
+    return true;
+  }
+
+  // TODO: Uncomment when GPS constraint is required.
+  // check if result has gps.
+  // let hasGps = doc.hasOwnProperty('longitude') && doc.hasOwnProperty('lattitude');
+
+  // check if assessment was completed and capture timestamps.
+  let ref = _.isArray(doc.subtestData) ? doc.subtestData : [doc.subtestData];
+  let subtestLength = ref.length;
+  lastSubtest = ref[subtestLength - 1];
+  beginAssessment = moment(ref[0].timestamp);
+
+  if (lastSubtest.prototype !== "complete") {
+    endAssessment = moment(lastSubtest.timestamp);
+  }
+
+  if (lastSubtest.prototype === "complete") {
+    let newSubtest = ref[subtestLength - 2];
+    endAssessment = moment(newSubtest.timestamp);
+    endTime = moment(lastSubtest.data.end_time);
+  }
+
+  // More checks for assessment validation.
+  if (startTime && endTime) {
+    // check if assessment was captured between the given hours.
+    let isStartTimeValid = startTime.hours() >= instrumentConstraints.timeOfDay.startTime.hour
+    let isEndTimeValid = endTime.hours() <= (instrumentConstraints.timeOfDay.endTime.hour - 12);
+
+    let isCapturedTimeValid = isStartTimeValid && isEndTimeValid;
+
+    // TODO: Uncomment when weekday constraint is required.
+    // check if assessment was captured during weekdays.
+    // let isDuringWeekday = startTime.weekday > 0 && startTime.weekday < 6;
+
+    // check if the difference between start time & end time of an assessment is more than a given duration
+    let isDurationValid = endAssessment.diff(beginAssessment, 'minutes') >= instrumentConstraints.duration.minutes;
+
+    return isCapturedTimeValid && isDurationValid;
+  }
+
+  return false;
+}
 
 exports.generateResult = generateResult;

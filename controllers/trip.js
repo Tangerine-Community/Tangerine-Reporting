@@ -9,12 +9,13 @@
 
 const nano = require('nano');
 const _ = require('lodash');
+const Promise = require('bluebird');
 
 /**
  * Local dependencies.
  */
 
-const processResult = require('./result').generateResult;
+const generateResult = require('./result').generateResult;
 const dbQuery = require('./../utils/dbQuery');
 
 /**
@@ -52,8 +53,10 @@ exports.processResult = (req, res) => {
 
   dbQuery.getResults(tripId, dbUrl)
     .then(async(data) => {
-      const result = processWorkflowResult(data);
-      const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
+      let totalResult = {};
+      const result = await processWorkflowResult(data, dbUrl);
+      result.forEach(element => totalResult = Object.assign(totalResult, element));
+      const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
       res.json(saveResponse);
     })
     .catch((err) => res.send(Error(err)));
@@ -95,13 +98,15 @@ exports.processAll = (req, res) => {
       let saveResponse;
       for (item of data) {
         let resultDoc = [{ doc: item }];
+        let processedResult = {};
         if (!item.tripId) {
           let docId = item.assessmentId || item.curriculumId;
-          let assessmentResults = await processResult(resultDoc);
+          let assessmentResults = await generateResult(resultDoc, 0, dbUrl);
           saveResponse = await dbQuery.saveResult(assessmentResults, resultDbUrl);
           console.log(saveResponse);
         } else {
-          let processedResult = await processWorkflowResult(resultDoc);
+          let result = await processWorkflowResult(resultDoc, 0, dbUrl);
+          result.forEach(element => processedResult = Object.assign(processedResult, element));
           saveResponse = await dbQuery.saveResult(processedResult, resultDbUrl);
           console.log(saveResponse);
         }
@@ -121,20 +126,16 @@ exports.processAll = (req, res) => {
 /**
  * This function processes the result for a workflow.
  *
- * @param {string} docId - worklfow id of the document.
+ * @param {Array} data - an array of workflow results.
+ * @param {string} dbUrl - database url.
  *
  * @returns {Object} - processed result for csv.
  */
 
-const processWorkflowResult = function(data) {
-  let workflowResults = {};
-  let count = 0;
-  for (item of data) {
-    let processedResult = processResult(item, count);
-    workflowResults = _.assignIn(workflowResults, processedResult);
-    count++;
-  }
-  return workflowResults;
+const processWorkflowResult = function (data, dbUrl) {
+  return Promise.map(data, (item, index) => {
+    return generateResult(item, index, dbUrl);
+  });
 }
 
 exports.processWorkflowResult = processWorkflowResult;
