@@ -90,23 +90,29 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   if (isWorkflowIdSet && isResult) {
     // seqDoc = { last_seq: resp.seq };
     console.info('\n<<<=== START PROCESSING WORKFLOW RESULT ===>>>\n');
-    let totalResult = {};
-    const workflowResult = await processWorkflowResult([resp], dbUrl);
-    workflowResult.forEach(element => totalResult = Object.assign(totalResult, element));
-    const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
-    console.log(saveResponse);
-    // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
-    console.info('\n<<<=== END PROCESSING WORKFLOW RESULT ===>>>\n');
+    dbQuery.getResults(resp.doc.tripId, dbUrl)
+      .then(async(data) => {
+        let totalResult = {};
+        const workflowResult = await processWorkflowResult(data, dbUrl);
+        workflowResult.forEach(element => totalResult = Object.assign(totalResult, element));
+        const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
+        console.log(saveResponse);
+        // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
+        console.info('\n<<<=== END PROCESSING WORKFLOW RESULT ===>>>\n');
+      })
+      .catch((err) => console.error(err));
   }
+
   if (!isWorkflowIdSet && isResult) {
     // seqDoc = { last_seq: resp.seq };
     console.info('\n<<<=== START PROCESSING ASSESSMENT RESULT  ===>>>\n');
-    const assessmentResult = await processAssessmentResult([resp]);
+    const assessmentResult = await processAssessmentResult([resp], 0, dbUrl);
     const saveResponse = await dbQuery.saveResult(assessmentResult, resultDbUrl);
     console.log(saveResponse);
     // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
     console.info('\n<<<=== END PROCESSING ASSESSMENT RESULT ===>>>\n');
   }
+
   if (isWorkflow) {
     // seqDoc = { last_seq: resp.seq };
     console.info('\n<<<=== START PROCESSING WORKFLOW COLLECTION  ===>>>\n');
@@ -116,6 +122,7 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
     // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
     console.info('\n<<<=== END PROCESSING WORKFLOW COLLECTION ===>>>\n');
   }
+
   if (isAssessment || isCurriculum || isQuestion || isSubtest) {
     // seqDoc = { last_seq: resp.seq };
     console.info('\n<<<=== START PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>\n');
@@ -125,6 +132,7 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
     // await dbQuery.saveUpdateSequence(resultDbUrl, seqDoc);
     console.info('\n<<<=== END PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION ===>>>\n');
   }
+
 }
 
 exports.processChangedDocument = processChangedDocument;

@@ -135,7 +135,8 @@ exports.processResult = (req, res) => {
       let resultDoc = { doc: data };
       const result = await generateResult(resultDoc, 0, dbUrl);
       const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
-      res.json(saveResponse);
+      console.log(saveResponse);
+      res.json(result);
     })
     .catch((err) => res.send(Error(err)));
 }
@@ -223,9 +224,12 @@ const generateResult = async function(collections, count = 0, dbUrl) {
       indexKeys.day = moment(collection.start_time).day();
       indexKeys.time = moment(collection.start_time).format('hh:mm');
       result.indexKeys = indexKeys;
+
+      let validationData = await validateResult(collection, dbUrl);
+      result.isValid = validationData.isValid;
+      result.isValidReason = validationData.reason;
     }
 
-    result.isValid = await validateResult(collection, dbUrl);
     result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
     result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
     result[`${collectionId}.enumerator${assessmentSuffix}`] = enumeratorName.replace(/\s/g,'-');
@@ -279,7 +283,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
           subtestCounts.timestampCount++;
         }
         if (doc.prototype === 'grid') {
-          let grid = processGridResult(doc, subtestCounts);
+          let grid = processGridResult(doc, subtestCounts, assessmentSuffix);
           result = _.assignIn(result, grid);
           subtestCounts.gridCount++;
           subtestCounts.timestampCount++;
@@ -526,12 +530,11 @@ function processSurveyResult(body, subtestCounts) {
  * @returns {Object} processed grid data.
  */
 
-function processGridResult(body, subtestCounts) {
-  let count = subtestCounts.gridCount;
+function processGridResult(body, subtestCounts, assessmentSuffix) {
   let varName = body.data.variable_name || body.name.toLowerCase().replace(/\s/g, '_');
   let subtestId = body.subtestId;
   let gridResult = {};
-  let suffix = count > 0 ? `_${count}` : '';
+  let suffix = subtestCounts.gridCount > 0 ? `_${subtestCounts.gridCount}` : '';
   let total = body.data.items.length;
   let correctSum = 0;
 
@@ -543,13 +546,13 @@ function processGridResult(body, subtestCounts) {
   gridResult[`${subtestId}.${varName}_time_allowed${suffix}`] = body.data.time_allowed;
 
   for (doc of body.data.items) {
-    let gridValue = translateGridValue(doc.itemResult);
+    let gridValue = doc.itemResult === 'correct' ? translateGridValue(doc.itemResult) : 0;
     gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = gridValue;
     correctSum += +gridValue;
   }
-  let fluencyRate =  Math.round(correctSum / (1 - body.data.time_remain / body.data.time_allowed));
 
-  gridResult[`${subtestId}.fluency_rate`] = fluencyRate;
+  let fluencyRate = Math.round(correctSum / (1 - body.data.time_remain / body.data.time_allowed));
+  gridResult[`${subtestId}.fluency_rate${assessmentSuffix}`] = fluencyRate;
   gridResult[`${subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(body.timestamp).format('hh:mm');
 
   return gridResult;
@@ -577,14 +580,6 @@ function processGpsResult(doc, subtestCounts) {
   gpsResult[`${doc.subtestId}.heading${suffix}`] = doc.data.heading;
   gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
   gpsResult[`${doc.subtestId}.timestamp_${subtestCounts.timestampCount}`] = moment(doc.data.timestamp).format('hh:mm');
-
-  // Added because of elastic search
-  gpsResult.geoip = {
-    location: {
-      lon: doc.data.long,
-      lat: doc.data.lat
-    }
-  };
 
   return gpsResult;
 }
@@ -647,7 +642,8 @@ function translateGridValue(databaseValue) {
  * @description – This function checks the validity of the document
  * based on certain criteria.
  *
- * @param {object} doc - a result collection.
+ * @param {object} doc - result collection.
+ * @param {string} dbUrl - database url.
  *
  * @returns {boolean} - result validity
  */
@@ -661,7 +657,7 @@ async function validateResult(doc, dbUrl) {
   let instrumentConstraints = validationParams && validationParams.constraints;
 
   if (!(validationParams && validationParams.enabled)) {
-    return true;
+    return { reason: 'Validation params not enabled.', isValid: true }
   }
 
   // TODO: Uncomment when GPS constraint is required.
@@ -699,10 +695,26 @@ async function validateResult(doc, dbUrl) {
     // check if the difference between start time & end time of an assessment is more than a given duration
     let isDurationValid = endAssessment.diff(beginAssessment, 'minutes') >= instrumentConstraints.duration.minutes;
 
-    return isCapturedTimeValid && isDurationValid;
+    let reason, isValid = isCapturedTimeValid && isDurationValid;
+
+    if (!isCapturedTimeValid) {
+      reason = 'Captured outside the expected time';
+    }
+
+    if (!isDurationValid) {
+      reason = 'Less than expected duration';
+    }
+
+    if (!isCapturedTimeValid && !isDurationValidelse) {
+      reason = 'Captured outside expected time & less than expected duration';
+    } else {
+      reason = 'Accurate result';
+    }
+
+    return { isValid, reason };
   }
 
-  return false;
+  return { isValid: false, reason: 'Incomplete Result' };
 }
 
 exports.generateResult = generateResult;

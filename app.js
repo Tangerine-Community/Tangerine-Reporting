@@ -49,8 +49,8 @@ const dbQuery = require('./utils/dbQuery');
 const processChangedDocument = require('./controllers/changes').processChangedDocument;
 
 // TODO: Uncomment all commented code to start processing from last update sequence
-// const checkUpdateSequence = require('./utils/dbQuery').checkUpdateSequence
-// let seq = await checkUpdateSequence(resultDbUrl);
+// let checkUpdateSequence = require('./utils/dbQuery').checkUpdateSequence
+// let seq =  checkUpdateSequence(dbConfig.result_db);
 
 const BASE_DB = nano(dbConfig.base_db);
 const feed = BASE_DB.follow({ since: 'now', include_docs: true });

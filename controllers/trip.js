@@ -57,7 +57,8 @@ exports.processResult = (req, res) => {
       const result = await processWorkflowResult(data, dbUrl);
       result.forEach(element => totalResult = Object.assign(totalResult, element));
       const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
-      res.json(saveResponse);
+      console.log(saveResponse);
+      res.json(totalResult);
     })
     .catch((err) => res.send(Error(err)));
 }
