@@ -180,6 +180,7 @@ exports.saveResult = (doc, dbUrl) => {
   delete doc.indexKeys;
 
   let docObj = {
+    updated_at: Date.now(),
     parent_id: cloneDoc.indexKeys.parent_id,
     result_time : cloneDoc.indexKeys.time,
     result_day : cloneDoc.indexKeys.day,
@@ -406,6 +407,19 @@ exports.getLocationList = function (dbUrl) {
       else {
         resolve(body);
       }
+    });
+  });
+}
+
+
+exports.getSettings = function (dbUrl) {
+  const BASE_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    BASE_DB.get('settings', (err, body) => {
+      if(err)
+        reject(err)
+      else
+        resolve(body);
     });
   });
 }
