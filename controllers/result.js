@@ -342,7 +342,7 @@ async function processLocationResult(body, subtestCounts, groupTimeZone, dbUrl) 
   let locSuffix = count > 0 ? `_${count}` : '';
   let subtestId = body.subtestId;
   let locationNames = await getLocationName(body, dbUrl);
-  let timestamp = convertToTimeZone(doc.timestamp, groupTimeZone);
+  let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
 
   locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/\s/g,'-');
   locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/\s/g,'-');
