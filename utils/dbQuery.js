@@ -147,6 +147,8 @@ exports.saveHeaders = (doc, key, dbUrl) => {
   return new Promise((resolve, reject) => {
     RESULT_DB.get(key, (error, existingDoc) => {
       let docObj = { column_headers: doc };
+      docObj.updated_at = new Date().toISOString();
+
       // if doc exists update it using its revision number.
       if (!error) {
         docObj = _.assignIn(existingDoc, docObj);
@@ -180,7 +182,7 @@ exports.saveResult = (doc, dbUrl) => {
   delete doc.indexKeys;
 
   let docObj = {
-    updated_at: Date.now(),
+    updated_at: new Date().toISOString(),
     parent_id: cloneDoc.indexKeys.parent_id,
     result_time : cloneDoc.indexKeys.time,
     result_day : cloneDoc.indexKeys.day,

@@ -205,7 +205,7 @@ exports.processAll = (req, res) => {
  */
 
 const generateResult = async function(collections, count = 0, dbUrl) {
-  let enumeratorName;
+  let enumeratorName, collection, collectionId, allTimestamps = [];
   let result = {};
   let indexKeys = {};
   let assessmentSuffix = count > 0 ? `_${count}` : '';
@@ -214,29 +214,13 @@ const generateResult = async function(collections, count = 0, dbUrl) {
   let groupTimeZone = dbSettings.timeZone;
 
   for (let [index, data] of resultCollections.entries()) {
-    let collection = data.doc;
-    let collectionId = collection.workflowId || collection.assessmentId || collection.curriculumId;
-    let start_time = convertToTimeZone(collection.start_time, groupTimeZone);
+    collection = data.doc;
+    collectionId = collection.workflowId || collection.assessmentId || collection.curriculumId;
     enumeratorName = collection.enumerator || collection.editedBy;
-
-    if (index === 0) {
-      indexKeys.parent_id = collectionId;
-      indexKeys.ref = collection.workflowId ? collection.tripId : collection._id;
-      indexKeys.year = moment(start_time).year();
-      indexKeys.month = moment(start_time).format('MMM');
-      indexKeys.day = moment(start_time).day();
-      indexKeys.time = moment(start_time).format('hh:mm');
-      result.indexKeys = indexKeys;
-
-      let validationData = await validateResult(collection, groupTimeZone, dbUrl);
-      result.isValid = validationData.isValid;
-      result.isValidReason = validationData.reason;
-    }
 
     result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
     result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
     result[`${collectionId}.enumerator${assessmentSuffix}`] = enumeratorName.replace(/\s/g,'-');
-    result[`${collectionId}.start_time${assessmentSuffix}`] = moment(start_time).format('hh:mm');
     result[`${collectionId}.order_map${assessmentSuffix}`] = collection.order_map ? collection.order_map.join(',') : '';
 
     let subtestCounts = {
@@ -254,6 +238,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
 
     if (subtestData[0] !== undefined) {
       for (doc of subtestData) {
+        allTimestamps.push(doc.timestamp);
         if (doc.prototype === 'location') {
           doc.enumerator = enumeratorName;
           let location = await processLocationResult(doc, subtestCounts, groupTimeZone, dbUrl);
@@ -310,7 +295,24 @@ const generateResult = async function(collections, count = 0, dbUrl) {
       }
     }
   }
+  // Validate result from subtest timestamps
+  allTimestamps = _.sortBy(allTimestamps);
+  let validationData = await validateResult(collection, groupTimeZone, dbUrl, allTimestamps);
+  result.isValid = validationData.isValid;
+  result.isValidReason = validationData.reason;
 
+  result.start_time = moment(validationData.startTime).format('hh:mm');
+  result.end_time = moment(validationData.endTime).format('hh:mm');
+
+  indexKeys.parent_id = collectionId;
+  indexKeys.ref = collection.workflowId ? collection.tripId : collection._id;
+  indexKeys.year = moment(validationData.startTime).year();
+  indexKeys.month = moment(validationData.startTime).format('MMM');
+  indexKeys.day = moment(validationData.startTime).date();
+  indexKeys.time = moment(validationData.startTime).format('hh:mm');
+  result.indexKeys = indexKeys;
+
+  // Include user metadata
   let username = `user-${enumeratorName}`;
   let userDetails = await dbQuery.getUserDetails(username, dbUrl);
   result.userRole = userDetails.role;
@@ -579,7 +581,7 @@ function processGridResult(body, subtestCounts, groupTimeZone, assessmentSuffix)
 function processGpsResult(doc, subtestCounts, groupTimeZone) {
   let gpsResult = {};
   let suffix = subtestCounts.gpsCount > 0 ? `_${subtestCounts.gpsCount}` : '';
-  let timestamp = convertToTimeZone(doc.data.timestamp, groupTimeZone);
+  let timestamp = convertToTimeZone(doc.timestamp, groupTimeZone);
 
   gpsResult[`${doc.subtestId}.latitude${suffix}`] = doc.data.lat;
   gpsResult[`${doc.subtestId}.longitude${suffix}`] = doc.data.long;
@@ -654,52 +656,29 @@ function translateGridValue(databaseValue) {
  * @param {object} doc - result collection.
  * @param {string} groupTimeZone - group time zone from db settings.
  * @param {string} dbUrl - database url.
+ * @param {Array} allTimestamps - instrument timestamp from each subtest.
  *
- * @returns {boolean} - result validity
+ * @returns {object} - result validity and other metadata.
  */
 
-async function validateResult(doc, groupTimeZone, dbUrl) {
-  let endTime, i, subtest, beginAssessment, endAssessment, lastSubtest;
-  let start_time = convertToTimeZone(doc.start_time, groupTimeZone);
-  let startTime = moment(start_time);
+async function validateResult(doc, groupTimeZone, dbUrl, allTimestamps) {
+  let startTime, endTime, isValid, reason;
   let docId = doc.workflowId || doc.assessmentId || doc.curriculumId;
   let collection = await dbQuery.retrieveDoc(docId, dbUrl);
   let validationParams = collection.authenticityParameters;
   let instrumentConstraints = validationParams && validationParams.constraints;
 
-  if (!(validationParams && validationParams.enabled)) {
-    return { reason: 'Validation params not enabled.', isValid: true }
-  }
+  // Convert to time zone.
+  let beginTimestamp = convertToTimeZone(allTimestamps[0], groupTimeZone);
+  let endTimestamp = convertToTimeZone(allTimestamps[allTimestamps.length - 1], groupTimeZone);
 
-  // TODO: Uncomment when GPS constraint is required.
-  // check if result has gps.
-  // let hasGps = doc.hasOwnProperty('longitude') && doc.hasOwnProperty('lattitude');
+  startTime = moment(beginTimestamp);
+  endTime = moment(endTimestamp);
 
-  // check if assessment was completed and capture timestamps.
-  let ref = _.isArray(doc.subtestData) ? doc.subtestData : [doc.subtestData];
-  let subtestLength = ref.length;
-  lastSubtest = ref[subtestLength - 1];
-  let beginTimestamp = convertToTimeZone(ref[0].timestamp, groupTimeZone);
-  beginAssessment = moment(beginTimestamp);
-
-  if (lastSubtest.prototype !== "complete") {
-    let lastSubtestTime = convertToTimeZone(lastSubtest.timestamp, groupTimeZone);
-    endAssessment = moment(lastSubtestTime);
-  }
-
-  if (lastSubtest.prototype === "complete") {
-    let newSubtest = ref[subtestLength - 2];
-    let newSubtestTime = convertToTimeZone(newSubtest.timestamp, groupTimeZone);
-    let endTimestamp = convertToTimeZone(data.end_time, groupTimeZone);
-    endAssessment = moment(newSubtestTime);
-    endTime = moment(endTimestamp);
-  }
-
-  // More checks for assessment validation.
-  if (startTime && endTime) {
+  if (validationParams && validationParams.enabled) {
     // check if assessment was captured between the given hours.
     let isStartTimeValid = startTime.hours() >= instrumentConstraints.timeOfDay.startTime.hour
-    let isEndTimeValid = endTime.hours() <= (instrumentConstraints.timeOfDay.endTime.hour - 12);
+    let isEndTimeValid = endTime.hours() <= instrumentConstraints.timeOfDay.endTime.hour;
 
     let isCapturedTimeValid = isStartTimeValid && isEndTimeValid;
 
@@ -708,28 +687,33 @@ async function validateResult(doc, groupTimeZone, dbUrl) {
     // let isDuringWeekday = startTime.weekday > 0 && startTime.weekday < 6;
 
     // check if the difference between start time & end time of an assessment is more than a given duration
-    let isDurationValid = endAssessment.diff(beginAssessment, 'minutes') >= instrumentConstraints.duration.minutes;
+    let isDurationValid = endTime.diff(startTime, 'minutes') >= instrumentConstraints.duration.minutes;
 
-    let reason, isValid = isCapturedTimeValid && isDurationValid;
+    isValid = isCapturedTimeValid && isDurationValid;
+
+    if (isCapturedTimeValid && isDurationValid) {
+      reason = 'Accurate result';
+    }
 
     if (!isCapturedTimeValid) {
-      reason = 'Captured outside the expected time';
+      reason = 'Captured outside the working hours';
     }
 
     if (!isDurationValid) {
       reason = 'Less than expected duration';
     }
 
-    if (!isCapturedTimeValid && !isDurationValidelse) {
-      reason = 'Captured outside expected time & less than expected duration';
-    } else {
-      reason = 'Accurate result';
+    if (isCapturedTimeValid == false && isDurationValid == false) {
+      reason = 'Captured outside working hours & less than expected duration';
     }
 
-    return { isValid, reason };
+  } else {
+    isValid = true;
+    reason = 'Validation params not enabled.';
   }
 
-  return { isValid: false, reason: 'Incomplete Result' };
+  return { startTime, endTime, isValid, reason };
+
 }
 
 /**
