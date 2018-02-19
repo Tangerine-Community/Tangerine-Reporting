@@ -44,14 +44,17 @@ const dbQuery = require('./../utils/dbQuery');
 exports.generate = (req, res) => {
   const resultDbUrl = req.body.result_db;
   const resultId = req.params.id;
+  const resultMonth= req.params.month;
+  const resultYear = req.params.year;
+  const queryId = resultMonth && resultYear ? `${resultId}_${resultYear}_${resultMonth}`: resultId;
 
   dbQuery.retrieveDoc(resultId, resultDbUrl)
     .then(async(docHeaders) => {
-      const result = await dbQuery.getProcessedResults(resultId, resultDbUrl);
+      const result = await dbQuery.getProcessedResults(queryId, resultDbUrl);
       generateCSV(docHeaders, result);
       res.json({ message: 'CSV Successfully Generated' });
     })
-    .catch((err) => Error(err));
+    .catch((err) => err);
 }
 
 /**
@@ -91,7 +94,7 @@ const generateCSV = function(columnData, resultData) {
     .then(() => {
       console.log(chalk.green(`✓ You have successfully created a new excel file at ${new Date()}`));
     })
-    .catch((err) => Error(err));
+    .catch((err) => err);
 
 }
 

@@ -59,7 +59,7 @@ const dbQuery = require('./../utils/dbQuery');
 exports.all = (req, res) => {
   dbQuery.getAllAssessment(req.body.base_db)
     .then((data) => res.json({ count: data.length, assessments: data }))
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 /**
@@ -103,7 +103,7 @@ exports.generateHeader = (req, res) => {
       const saveResponse = await dbQuery.saveHeaders(colHeaders, docId, resultDbUrl);
       res.json(saveResponse);
     })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 /**
@@ -149,7 +149,7 @@ exports.generateAll = (req, res) => {
       }
       res.json(saveResponse);
     })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 /*****************************

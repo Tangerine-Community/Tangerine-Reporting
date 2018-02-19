@@ -60,7 +60,7 @@ exports.processResult = (req, res) => {
       console.log(saveResponse);
       res.json(totalResult);
     })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 /**
@@ -114,7 +114,7 @@ exports.processAll = (req, res) => {
       }
       res.json(saveResponse);
     })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 

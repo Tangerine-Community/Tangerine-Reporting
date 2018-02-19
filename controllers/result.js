@@ -91,7 +91,7 @@ const surveyValueMap = {
 exports.all = (req, res) => {
   dbQuery.getAllResult(req.body.base_db)
     .then((data) => res.json(data))
-    .catch((err) => res.json(Error(err)));
+    .catch((err) => res.json(err));
 }
 
 /**
@@ -138,7 +138,7 @@ exports.processResult = (req, res) => {
       console.log(saveResponse);
       res.json(result);
     })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 /**
@@ -184,7 +184,7 @@ exports.processAll = (req, res) => {
       }
       res.json(saveResponse);
     })
-    .catch((err) => res.send(Error(err)))
+    .catch((err) => res.send(err))
 }
 
 

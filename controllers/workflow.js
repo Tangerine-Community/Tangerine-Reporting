@@ -57,7 +57,7 @@ const dbQuery = require('./../utils/dbQuery');
 exports.all = (req, res) => {
   dbQuery.getAllWorkflow(req.body.base_db)
     .then((data) => res.json({ count: data.length, workflows: data }))
-    .catch((err) => res.json(Error(err)));
+    .catch((err) => res.json(err));
 }
 
 /**
@@ -99,7 +99,7 @@ exports.generateHeader = (req, res) => {
       const saveResponse = await dbQuery.saveHeaders(colHeaders, workflowId, resultDbUrl);
       res.json(saveResponse);
     })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 /**
@@ -144,7 +144,7 @@ exports.generateAll = (req, res) => {
       }
       res.json(saveResponse);
     })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 

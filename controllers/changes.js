@@ -69,7 +69,7 @@ exports.changes = async(req, res) => {
     setTimeout(function() { feed.resume() }, 500);
   });
 
-  feed.on('error', (err) => res.send(Error(err)));
+  feed.on('error', (err) => res.send(err));
   feed.follow();
 }
 
