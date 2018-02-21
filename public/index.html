@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <link rel="stylesheet" href="./style.css">
+  <title>Tusome CSV Generator</title>
+</head>
+
+<body>
+
+  <div class="main-container">
+    <div class="top center">
+      <img src="./tangerine_logo.png" alt="Tangerine Logo">
+      <h2>Tusome CSV Generation Form</h2>
+    </div>
+    <div class="form-container">
+      <form action="/" method="post">
+        <p>Workflow Id field is compulsory but the year and month fields are optional.</p>
+        <p>
+          <label for="workflowId">Workflow Id: <sup class="star">*</sup> </label>
+          <input type="text" name="workflowId" id="workflowId" placeholder="e.g. 06682322-03d8-ca54-f5b6-571564292680">
+        </p>
+        <p>
+          <label for="year">Year: </label>
+          <input type="text" name="year" id="year" placeholder="e.g. 2018">
+        </p>
+        <p>
+          <label for="month">Month: </label>
+          <input type="text" name="month" id="month" placeholder="e.g. Jan">
+        </p>
+        <p class="center"><button type="submit" class="btn">Generate CSV</button></p>
+      </form>
+    </div>
+  </div>
+</body>
+
+</html>
