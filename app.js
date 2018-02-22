@@ -73,7 +73,7 @@ app.post('/', (req, res) => {
   const resultId = req.body.workflowId;
   const resultYear = req.body.year;
   let resultMonth = req.body.month;
-  resultMonth = resultMonth ? resultMonth[0].toUpperCase() + resultMonth.substr(1, 2) : false;
+  resultMonth = resultMonth ? resultMonth : false;
 
   let queryId = resultMonth && resultYear ? `${resultId}_${resultYear}_${resultMonth}` : resultId;
 
@@ -81,7 +81,7 @@ app.post('/', (req, res) => {
     .then(async (docHeaders) => {
       const result = await dbQuery.getProcessedResults(queryId, resultDbUrl);
       const csvFile = await generateCSV(docHeaders, result);
-      const downloadFile = __dirname +`/${csvFile}`;
+      const downloadFile = __dirname + `/${csvFile}`;
       res.download(downloadFile);
     })
     .catch((err) => res.send(err));

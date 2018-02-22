@@ -54,8 +54,8 @@ exports.generate = (req, res) => {
   dbQuery.retrieveDoc(resultId, resultDbUrl)
     .then(async(docHeaders) => {
       const result = await dbQuery.getProcessedResults(queryId, resultDbUrl);
-      await generateCSV(docHeaders, result);
-      res.json({ message: 'CSV Successfully Generated' });
+      const csvFile = await generateCSV(docHeaders, result);
+      res.json({ message: 'CSV Successfully Generated', filepath: csvFile });
     })
     .catch((err) => err);
 }
