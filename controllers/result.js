@@ -375,20 +375,14 @@ async function getLocationName(body, dbUrl) {
   let levels = locationList.locationsLevels;
 
   if (schoolId) {
-    let username = `user-${body.enumerator}`;
-    let userDetails = await dbQuery.getUserDetails(username, dbUrl);
-
-    for (const [label, id] of Object.entries(userDetails.location)) {
-      for (j = 0; j < levels.length; j++) {
-        if (label == levels[j]) {
-          locIds.push(id);
-          break;
-        }
-      }
+    let locLabels = body.data.labels.map(loc => loc.toLowerCase());
+    for (j = 0; j < levels.length; j++) {
+      locNames[levels[j]] = {};
+      let level = levels[j] === 'school' ? 'schoolname' : levels[j];
+      let index = locLabels.indexOf(level);
+      locNames[levels[j]]['label'] = body.data.location[index].toLowerCase();
     }
-    if (locIds.length < levels.length) {
-      locIds.push(schoolId);
-    }
+    return locNames;
   } else {
     locIds = body.data.location;
   }
@@ -421,9 +415,9 @@ async function getLocationName(body, dbUrl) {
           }
         }
       } else {
-        locNames[locLabels[i+2]] = _.get(locNames[locLabels[i+1]].children, locIds[i+2]);
-        if (locNames[locLabels[i+2]]) {
-          locNames[locLabels[i+3]] = _.get(locNames[locLabels[i+2]].children, locIds[i+3]);
+        locNames[levels[i+2]] = _.get(locNames[levels[i+1]].children, locIds[i+2]);
+        if (locNames[levels[i+2]]) {
+          locNames[levels[i+3]] = _.get(locNames[levels[i+2]].children, locIds[i+3]);
         }
       }
       break;
