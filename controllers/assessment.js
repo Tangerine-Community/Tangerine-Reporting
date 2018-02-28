@@ -181,6 +181,13 @@ const createColumnHeaders = function(doc, count = 0, dbUrl) {
         assessments.push({ header: `enumerator${assessmentSuffix}`, key: `${docId}.enumerator${assessmentSuffix}` });
         assessments.push({ header: `start_time${assessmentSuffix}`, key: `${docId}.start_time${assessmentSuffix}` });
         assessments.push({ header: `order_map${assessmentSuffix}`, key: `${docId}.order_map${assessmentSuffix}` });
+        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docId}.end_time${assessmentSuffix}` });
+        if (count < 1) {
+          assessments.push({ header: 'user_role', key: `${docId}.userRole` });
+          assessments.push({ header: 'mpesa_number', key: `${docId}.mPesaNumber` });
+          assessments.push({ header: 'phone_number', key: `${docId}.phoneNumber` });
+          assessments.push({ header: 'full_name', key: `${docId}.fullName` });
+        }
         return dbQuery.getSubtests(collectionId, dbUrl);
       })
       .then(async(subtestData) => {
@@ -195,7 +202,6 @@ const createColumnHeaders = function(doc, count = 0, dbUrl) {
           gridCount: 0,
           timestampCount: 0
         };
-
         for (data of subtestData) {
           if (data.prototype === 'location') {
             let location = createLocation(data, subtestCounts);
@@ -246,9 +252,6 @@ const createColumnHeaders = function(doc, count = 0, dbUrl) {
             subtestCounts.timestampCount++;
           }
         }
-        let assessmentSuffix = count > 0 ? `_${count}` : '';
-        assessments.push({ header: `end_time${assessmentSuffix}`, key: `${docId}.end_time${assessmentSuffix}` });
-
         resolve(assessments);
       })
       .catch((err) => reject(err));
@@ -275,18 +278,13 @@ function createLocation(doc, subtestCounts) {
   let count = subtestCounts.locationCount;
   let locationHeader = [];
   let labels = doc.levels;
+  let locSuffix = count > 0 ? `_${count}` : '';
 
-  for (i = 0; i < labels.length; i++) {
-    let locSuffix = count > 0 ? `_${count}` : '';
-    locationHeader.push({
-      header: `${labels[i]}${locSuffix}`,
-      key: `${doc._id}.${labels[i].toLowerCase()}${locSuffix}`
-    });
-  }
-  locationHeader.push({
-    header: `timestamp_${subtestCounts.timestampCount}`,
-    key: `${doc._id}.timestamp_${subtestCounts.timestampCount}`
-  });
+  locationHeader.push({ header: `county${locSuffix}`, key: `${doc._id}.county${locSuffix}` });
+  locationHeader.push({ header: `subcounty${locSuffix}`, key: `${doc._id}.subcounty${locSuffix}` });
+  locationHeader.push({ header: `zone${locSuffix}`, key: `${doc._id}.zone${locSuffix}` });
+  locationHeader.push({ header: `school${locSuffix}`, key: `${doc._id}.school${locSuffix}` });
+  locationHeader.push({ header: `timestamp_${subtestCounts.timestampCount}`, key: `${doc._id}.timestamp_${subtestCounts.timestampCount}` });
 
   return locationHeader;
 }

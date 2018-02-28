@@ -300,9 +300,8 @@ const generateResult = async function(collections, count = 0, dbUrl) {
   let validationData = await validateResult(collection, groupTimeZone, dbUrl, allTimestamps);
   result.isValid = validationData.isValid;
   result.isValidReason = validationData.reason;
-
-  result.start_time = moment(validationData.startTime).format('hh:mm');
-  result.end_time = moment(validationData.endTime).format('hh:mm');
+  result[`${collectionId}.start_time`] = moment(validationData.startTime).format('hh:mm');
+  result[`${collectionId}.end_time`] = moment(validationData.endTime).format('hh:mm');
 
   indexKeys.parent_id = collectionId;
   indexKeys.ref = collection.workflowId ? collection.tripId : collection._id;
@@ -315,10 +314,10 @@ const generateResult = async function(collections, count = 0, dbUrl) {
   // Include user metadata
   let username = `user-${enumeratorName}`;
   let userDetails = await dbQuery.getUserDetails(username, dbUrl);
-  result.userRole = userDetails.role;
-  result.mPesaNumber = userDetails.mPesaNumber;
-  result.phoneNumber = userDetails.phoneNumber || userDetails.phone;
-  result.fullName = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
+  result[`${collectionId}.userRole`] = userDetails.role;
+  result[`${collectionId}.mPesaNumber`] = userDetails.mPesaNumber;
+  result[`${collectionId}.phoneNumber`] = userDetails.phoneNumber || userDetails.phone;
+  result[`${collectionId}.fullName`] = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
 
   return result;
 }

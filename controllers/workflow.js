@@ -97,7 +97,8 @@ exports.generateHeader = (req, res) => {
     .then(async(doc) => {
       let colHeaders = await createWorkflowHeaders(doc, dbUrl);
       const saveResponse = await dbQuery.saveHeaders(colHeaders, workflowId, resultDbUrl);
-      res.json(saveResponse);
+      console.log(saveResponse);
+      res.json(colHeaders);
     })
     .catch((err) => res.send(err));
 }
