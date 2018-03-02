@@ -97,7 +97,7 @@ const generateCSV = function(columnData, resultData) {
     workbook.xlsx.writeFile(filename, 'utf8')
       .then(() => {
         console.log(chalk.green(`✓ You have successfully created a new excel file at ${new Date()}`));
-        resolve(filename)
+        resolve(filename);
       })
       .catch((err) => reject(err));
   });
