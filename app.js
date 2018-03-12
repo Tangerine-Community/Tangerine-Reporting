@@ -99,7 +99,7 @@ app.post('/workflow', workflowController.all);
 app.post('/workflow/headers/all', workflowController.generateAll);
 app.post('/workflow/headers/:id', workflowController.generateHeader);
 
-app.post('/workflow/result/all', tripController.processAll);
+// app.post('/workflow/result/all', tripController.processAll);
 app.post('/workflow/result/:id', tripController.processResult);
 
 app.post('/generate_csv/:id/:year?/:month?', csvController.generate);

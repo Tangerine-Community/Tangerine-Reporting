@@ -56,63 +56,9 @@ exports.processResult = (req, res) => {
       let totalResult = {};
       const result = await processWorkflowResult(data, dbUrl);
       result.forEach(element => totalResult = Object.assign(totalResult, element));
-      const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
-      console.log(saveResponse);
+      // const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
+      // console.log(saveResponse);
       res.json(totalResult);
-    })
-    .catch((err) => res.send(err));
-}
-
-/**
- * Process results for ALL workflows in the database.
- *
- * Example:
- *
- *    POST /workflow/result/_all
- *
- *  The request object must contain the main database url and a
- *  result database url where the generated headers will be saved.
- *     {
- *       "db_url": "http://admin:password@test.tangerine.org/database_name"
- *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
- *     }
- *
- * Response:
- *
- *   Returns an Object indicating the data has been saved.
- *      {
- *        "ok": true,
- *        "id": "a1234567890",
- *        "rev": "1-b123"
- *       }
- *
- * @param req - HTTP request object
- * @param res - HTTP response object
- */
-
-exports.processAll = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
-
-  dbQuery.getAllResult(dbUrl)
-    .then(async(data) => {
-      let saveResponse;
-      for (item of data) {
-        let resultDoc = [{ doc: item }];
-        let processedResult = {};
-        if (!item.tripId) {
-          let docId = item.assessmentId || item.curriculumId;
-          let assessmentResults = await generateResult(resultDoc, 0, dbUrl);
-          saveResponse = await dbQuery.saveResult(assessmentResults, resultDbUrl);
-          console.log(saveResponse);
-        } else {
-          let result = await processWorkflowResult(resultDoc, 0, dbUrl);
-          result.forEach(element => processedResult = Object.assign(processedResult, element));
-          saveResponse = await dbQuery.saveResult(processedResult, resultDbUrl);
-          console.log(saveResponse);
-        }
-      }
-      res.json(saveResponse);
     })
     .catch((err) => res.send(err));
 }
@@ -134,9 +80,11 @@ exports.processAll = (req, res) => {
  */
 
 const processWorkflowResult = function (data, dbUrl) {
-  return Promise.map(data, (item, index) => {
-    return generateResult(item, index, dbUrl);
-  });
+  const dataPromise = () => data.map((item, index) => generateResult(item, index, dbUrl));
+  return Promise.all(dataPromise()).then((resp) => resp);
+  // return Promise.map(data, (item, index) => {
+  //   return generateResult(item, index, dbUrl);
+  // });
 }
 
 exports.processWorkflowResult = processWorkflowResult;
