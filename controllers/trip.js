@@ -87,6 +87,7 @@ const processWorkflowResult = function (data, dbUrl) {
     }
   });
 
+  // Processing trip results and validate them
   return Promise.all(tripPromise()).then(async (body) => {
     let totalResult = {};
     let result = { indexKeys: {} };

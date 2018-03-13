@@ -141,53 +141,6 @@ exports.processResult = (req, res) => {
     .catch((err) => res.send(err));
 }
 
-/**
- * Process results for ALL assessments in a database
- * and save them in a different database.
- *
- * Example:
- *
- *    POST /assessment/result/_all
- *
- *  The request object must contain the main database url and a
- *  result database url where the generated header will be saved.
- *     {
- *       "db_url": "http://admin:password@test.tangerine.org/database_name"
- *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
- *     }
- *
- * Response:
- *
- *   Returns an Object indicating the data has been saved.
- *      {
- *        "ok": true,
- *        "id": "a1234567890",
- *        "rev": "1-b123"
- *      }
- *
- * @param req - HTTP request object
- * @param res - HTTP response object
- */
-
-exports.processAll = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
-
-  dbQuery.getAllResult(dbUrl)
-    .then(async(data) => {
-      let saveResponse;
-      for (item of data) {
-        let docId = item.assessmentId || item.curriculumId;
-        let ref = item._id;
-        let processedResult = await generateResult(docId, 0, dbUrl);
-        saveResponse = await dbQuery.saveResult(processedResult, ref, resultDbUrl);
-      }
-      res.json(saveResponse);
-    })
-    .catch((err) => res.send(err))
-}
-
-
 /************************
  *  APPLICATION MODULE  *
  ************************
