@@ -9,13 +9,15 @@
 
 const nano = require('nano');
 const _ = require('lodash');
-const Promise = require('bluebird');
+const moment = require('moment');
+moment().format();
 
 /**
  * Local dependencies.
  */
 
 const generateResult = require('./result').generateResult;
+const validateResult = require('./result').validateResult;
 const dbQuery = require('./../utils/dbQuery');
 
 /**
@@ -53,11 +55,9 @@ exports.processResult = (req, res) => {
 
   dbQuery.getResults(tripId, dbUrl)
     .then(async(data) => {
-      let totalResult = {};
-      const result = await processWorkflowResult(data, dbUrl);
-      result.forEach(element => totalResult = Object.assign(totalResult, element));
-      // const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
-      // console.log(saveResponse);
+      const totalResult = await processWorkflowResult(data, dbUrl);
+      const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
+      console.log(saveResponse);
       res.json(totalResult);
     })
     .catch((err) => res.send(err));
@@ -80,11 +80,45 @@ exports.processResult = (req, res) => {
  */
 
 const processWorkflowResult = function (data, dbUrl) {
-  const dataPromise = () => data.map((item, index) => generateResult(item, index, dbUrl));
-  return Promise.all(dataPromise()).then((resp) => resp);
-  // return Promise.map(data, (item, index) => {
-  //   return generateResult(item, index, dbUrl);
-  // });
+  const tripPromise = () => data.map((item, index) => {
+    let itemId = item.doc.workflowId ||item.doc.assessmentId ||item.doc.curriculumId;
+    if (itemId != undefined) {
+      return generateResult(item, index, dbUrl);
+    }
+  });
+
+  return Promise.all(tripPromise()).then(async (body) => {
+    let totalResult = {};
+    let result = { indexKeys: {} };
+    let docId = body[0].indexKeys.collectionId;
+    let groupTimeZone = body[0].indexKeys.groupTimeZone;
+
+    let allTimestamps = _.chain(body)
+      .map(el => el && el.indexKeys.timestamps)
+      .filter(val => val != null || undefined)
+      .flatten()
+      .sortBy()
+      .value();
+
+    // Validate result from all subtest timestamps
+    let validationData = await validateResult(docId, groupTimeZone, dbUrl, allTimestamps);
+    result.isValid = validationData.isValid;
+    result.isValidReason = validationData.reason;
+    result[`${docId}.start_time`] = moment(validationData.startTime).format('hh:mm');
+    result[`${docId}.end_time`] = moment(validationData.endTime).format('hh:mm');
+
+    result.indexKeys.year = moment(validationData.startTime).year();
+    result.indexKeys.month = moment(validationData.startTime).format('MMM');
+    result.indexKeys.day = moment(validationData.startTime).date();
+    result.indexKeys.day = moment(validationData.startTime).date();
+    result.indexKeys.parent_id = docId;
+    result.indexKeys.ref = body[0].indexKeys.ref;
+
+    body.push(result);
+    body.forEach(element => (totalResult = Object.assign(totalResult, element)));
+
+    return totalResult;
+  });
 }
 
 exports.processWorkflowResult = processWorkflowResult;

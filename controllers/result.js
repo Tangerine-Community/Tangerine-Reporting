@@ -205,7 +205,7 @@ exports.processAll = (req, res) => {
  */
 
 const generateResult = async function(collections, count = 0, dbUrl) {
-  let enumeratorName, collection, collectionId, allTimestamps = [];
+  let enumeratorName, collection, collectionId, timestamps = [];
   let result = {};
   let indexKeys = {};
   let assessmentSuffix = count > 0 ? `_${count}` : '';
@@ -217,7 +217,9 @@ const generateResult = async function(collections, count = 0, dbUrl) {
     collection = data.doc;
     collectionId = collection.workflowId || collection.assessmentId || collection.curriculumId;
     enumeratorName = collection.enumerator || collection.editedBy;
-
+    if (collectionId == undefined) {
+      break;
+    }
     result[`${collectionId}.assessmentId${assessmentSuffix}`] = collectionId;
     result[`${collectionId}.assessmentName${assessmentSuffix}`] = collection.assessmentName;
     result[`${collectionId}.enumerator${assessmentSuffix}`] = enumeratorName.replace(/\s/g,'-');
@@ -236,11 +238,10 @@ const generateResult = async function(collections, count = 0, dbUrl) {
     };
     let subtestData = _.isArray(collection.subtestData) ? collection.subtestData : [collection.subtestData];
 
-    if (subtestData[0] !== undefined) {
+    if (subtestData[0] != undefined) {
       for (doc of subtestData) {
-        allTimestamps.push(doc.timestamp);
+        timestamps.push(doc.timestamp);
         if (doc.prototype === 'location') {
-          doc.enumerator = enumeratorName;
           let location = await processLocationResult(doc, subtestCount, groupTimeZone, dbUrl);
           result = _.assignIn(result, location);
           subtestCount.locationCount++;
@@ -295,32 +296,22 @@ const generateResult = async function(collections, count = 0, dbUrl) {
       }
     }
   }
-  // Validate result from subtest timestamps
-  allTimestamps = allTimestamps.filter(time => {
-    if (time) return time;
-  });
-  allTimestamps = _.sortBy(allTimestamps);
-  let validationData = await validateResult(collection, groupTimeZone, dbUrl, allTimestamps);
-  result.isValid = validationData.isValid;
-  result.isValidReason = validationData.reason;
-  result[`${collectionId}.start_time`] = moment(validationData.startTime).format('hh:mm');
-  result[`${collectionId}.end_time`] = moment(validationData.endTime).format('hh:mm');
 
-  indexKeys.parent_id = collectionId;
-  indexKeys.ref = collection.workflowId ? collection.tripId : collection._id;
-  indexKeys.year = moment(validationData.startTime).year();
-  indexKeys.month = moment(validationData.startTime).format('MMM');
-  indexKeys.day = moment(validationData.startTime).date();
-  indexKeys.time = moment(validationData.startTime).format('hh:mm');
-  result.indexKeys = indexKeys;
+  if (collectionId != undefined) {
+    indexKeys.groupTimeZone = groupTimeZone;
+    indexKeys.timestamps = timestamps;
+    indexKeys.collectionId = collectionId;
+    indexKeys.ref = collection.workflowId ? collection.tripId : collection._id;
+    result.indexKeys = indexKeys;
 
-  // Include user metadata
-  let username = `user-${enumeratorName}`;
-  let userDetails = await dbQuery.getUserDetails(username, dbUrl);
-  result[`${collectionId}.userRole`] = userDetails.role;
-  result[`${collectionId}.mPesaNumber`] = userDetails.mPesaNumber;
-  result[`${collectionId}.phoneNumber`] = userDetails.phoneNumber || userDetails.phone;
-  result[`${collectionId}.fullName`] = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
+    // Include user metadata
+    let username = `user-${enumeratorName}`;
+    let userDetails = await dbQuery.getUserDetails(username, dbUrl);
+    result[`${collectionId}.userRole`] = userDetails.role;
+    result[`${collectionId}.mPesaNumber`] = userDetails.mPesaNumber;
+    result[`${collectionId}.phoneNumber`] = userDetails.phoneNumber || userDetails.phone;
+    result[`${collectionId}.fullName`] = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
+  }
 
   return result;
 }
@@ -646,7 +637,7 @@ function translateGridValue(databaseValue) {
  * @description – This function checks the validity of the document
  * based on certain criteria.
  *
- * @param {object} doc - result collection.
+ * @param {object} docId - result collection Id.
  * @param {string} groupTimeZone - group time zone from db settings.
  * @param {string} dbUrl - database url.
  * @param {Array} allTimestamps - instrument timestamp from each subtest.
@@ -654,9 +645,8 @@ function translateGridValue(databaseValue) {
  * @returns {object} - result validity and other metadata.
  */
 
-async function validateResult(doc, groupTimeZone, dbUrl, allTimestamps) {
+async function validateResult(docId, groupTimeZone, dbUrl, allTimestamps) {
   let startTime, endTime, isValid, reason;
-  let docId = doc.workflowId || doc.assessmentId || doc.curriculumId;
   let collection = await dbQuery.retrieveDoc(docId, dbUrl);
   let validationParams = collection.authenticityParameters;
   let instrumentConstraints = validationParams && validationParams.constraints;
@@ -674,10 +664,6 @@ async function validateResult(doc, groupTimeZone, dbUrl, allTimestamps) {
     let isEndTimeValid = endTime.hours() <= instrumentConstraints.timeOfDay.endTime.hour;
 
     let isCapturedTimeValid = isStartTimeValid && isEndTimeValid;
-
-    // TODO: Uncomment when weekday constraint is required.
-    // check if assessment was captured during weekdays.
-    // let isDuringWeekday = startTime.weekday > 0 && startTime.weekday < 6;
 
     // check if the difference between start time & end time of an assessment is more than a given duration
     let isDurationValid = endTime.diff(startTime, 'minutes') >= instrumentConstraints.duration.minutes;
@@ -706,7 +692,6 @@ async function validateResult(doc, groupTimeZone, dbUrl, allTimestamps) {
   }
 
   return { startTime, endTime, isValid, reason };
-
 }
 
 /**
@@ -732,3 +717,5 @@ function convertToTimeZone (timestamp, timeZone) {
 
 
 exports.generateResult = generateResult;
+
+exports.validateResult = validateResult;
