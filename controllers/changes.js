@@ -97,7 +97,7 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
 
   if (!isWorkflowIdSet && isResult) {
     console.info('\n<<<=== START PROCESSING ASSESSMENT RESULT  ===>>>\n');
-    const assessmentResult = await processAssessmentResult([resp], 0, dbUrl);
+    let assessmentResult = await processAssessmentResult([resp], 0, dbUrl);
     let docId = assessmentResult.indexKeys.collectionId;
     let groupTimeZone = assessmentResult.indexKeys.groupTimeZone;
     let allTimestamps = _.sortBy(assessmentResult.indexKeys.timestamps);
