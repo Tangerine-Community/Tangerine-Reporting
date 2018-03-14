@@ -105,15 +105,14 @@ const processWorkflowResult = function (data, dbUrl) {
     let validationData = await validateResult(docId, groupTimeZone, dbUrl, allTimestamps);
     result.isValid = validationData.isValid;
     result.isValidReason = validationData.reason;
-    result[`${docId}.start_time`] = moment(validationData.startTime).format('hh:mm');
-    result[`${docId}.end_time`] = moment(validationData.endTime).format('hh:mm');
+    result[`${docId}.start_time`] = validationData.startTime;
+    result[`${docId}.end_time`] = validationData.endTime;
 
-    result.indexKeys.year = moment(validationData.startTime).year();
-    result.indexKeys.month = moment(validationData.startTime).format('MMM');
-    result.indexKeys.day = moment(validationData.startTime).date();
-    result.indexKeys.day = moment(validationData.startTime).date();
-    result.indexKeys.parent_id = docId;
     result.indexKeys.ref = body[0].indexKeys.ref;
+    result.indexKeys.parent_id = docId;
+    result.indexKeys.year = validationData.indexKeys.year;
+    result.indexKeys.month = validationData.indexKeys.month;
+    result.indexKeys.day = validationData.indexKeys.day;
 
     body.push(result);
     body.forEach(element => (totalResult = Object.assign(totalResult, element)));

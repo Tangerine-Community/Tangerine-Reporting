@@ -133,7 +133,24 @@ exports.processResult = (req, res) => {
   dbQuery.retrieveDoc(docId, dbUrl)
     .then(async(data) => {
       let resultDoc = { doc: data };
-      const result = await generateResult(resultDoc, 0, dbUrl);
+      let result = await generateResult(resultDoc, 0, dbUrl);
+      let docId = result.indexKeys.collectionId;
+      let groupTimeZone = result.indexKeys.groupTimeZone;
+      let allTimestamps = _.sortBy(result.indexKeys.timestamps);
+
+      // Validate result from all subtest timestamps
+      let validationData = await validateResult(docId, groupTimeZone, dbUrl, allTimestamps);
+      result.isValid = validationData.isValid;
+      result.isValidReason = validationData.reason;
+      result[`${docId}.start_time`] = validationData.startTime;
+      result[`${docId}.end_time`] = validationData.endTime;
+
+      result.indexKeys.ref = result.indexKeys.ref;
+      result.indexKeys.parent_id = docId;
+      result.indexKeys.year = validationData.indexKeys.year;
+      result.indexKeys.month = validationData.indexKeys.month;
+      result.indexKeys.day = validationData.indexKeys.day;
+
       const saveResponse = await dbQuery.saveResult(result, resultDbUrl);
       console.log(saveResponse);
       res.json(result);
@@ -600,6 +617,7 @@ function translateGridValue(databaseValue) {
 
 async function validateResult(docId, groupTimeZone, dbUrl, allTimestamps) {
   let startTime, endTime, isValid, reason;
+  let validData = { indexKeys: {} };
   let collection = await dbQuery.retrieveDoc(docId, dbUrl);
   let validationParams = collection.authenticityParameters;
   let instrumentConstraints = validationParams && validationParams.constraints;
@@ -644,7 +662,16 @@ async function validateResult(docId, groupTimeZone, dbUrl, allTimestamps) {
     reason = 'Validation params not enabled.';
   }
 
-  return { startTime, endTime, isValid, reason };
+  validData[`${docId}.start_time`] = startTime;
+  validData[`${docId}.end_time`] = endTime;
+  validData.isValid = isValid;
+  validData.reason = reason;
+  validData.indexKeys.year = moment(startTime).year();
+  validData.indexKeys.month = moment(startTime).format('MMM');
+  validData.indexKeys.day = moment(startTime).date();
+  validData.indexKeys.parent_id = docId;
+
+  return validData;
 }
 
 /**

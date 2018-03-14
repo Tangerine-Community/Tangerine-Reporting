@@ -81,7 +81,7 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const isQuestion = (collectionType === 'question') ? true : false;
   const isSubtest = (collectionType === 'subtest') ? true : false;
 
-  console.info(`::: Processing ${collectionType} document on sequence ${resp.seq} :::`);
+  console.info(`\n::: Processing ${collectionType} document on sequence ${resp.seq} :::\n`);
 
   if (isWorkflowIdSet && isResult) {
     console.info('\n<<<=== START PROCESSING WORKFLOW RESULT ===>>>\n');
@@ -98,6 +98,23 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   if (!isWorkflowIdSet && isResult) {
     console.info('\n<<<=== START PROCESSING ASSESSMENT RESULT  ===>>>\n');
     const assessmentResult = await processAssessmentResult([resp], 0, dbUrl);
+    let docId = assessmentResult.indexKeys.collectionId;
+    let groupTimeZone = assessmentResult.indexKeys.groupTimeZone;
+    let allTimestamps = _.sortBy(assessmentResult.indexKeys.timestamps);
+
+    // Validate result from all subtest timestamps
+    let validationData = await validateResult(docId, groupTimeZone, dbUrl, allTimestamps);
+    assessmentResult.isValid = validationData.isValid;
+    assessmentResult.isValidReason = validationData.reason;
+    assessmentResult[`${docId}.start_time`] = validationData.startTime;
+    assessmentResult[`${docId}.end_time`] = validationData.endTime;
+
+    assessmentResult.indexKeys.ref = assessmentResult.indexKeys.ref;
+    assessmentResult.indexKeys.parent_id = docId;
+    assessmentResult.indexKeys.year = validationData.indexKeys.year;
+    assessmentResult.indexKeys.month = validationData.indexKeys.month;
+    assessmentResult.indexKeys.day = validationData.indexKeys.day;
+
     const saveResponse = await dbQuery.saveResult(assessmentResult, resultDbUrl);
     console.log(saveResponse);
     console.info('\n<<<=== END PROCESSING ASSESSMENT RESULT ===>>>\n');
