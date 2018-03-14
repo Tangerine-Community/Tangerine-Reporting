@@ -18,6 +18,7 @@ const nano = require('nano');
  */
 
 const dbQuery = require('./../utils/dbQuery');
+const resultDB = require('./../config').result_db;
 
 /**
  * Generates a CSV file.
@@ -42,16 +43,21 @@ const dbQuery = require('./../utils/dbQuery');
  */
 
 exports.generate = (req, res) => {
-  const resultDbUrl = req.body.result_db;
-  const resultId = req.params.id;
+  const resultDbUrl = req.body.result_db ||resultDB;
+  const resultId = req.body.workflowId || req.params.id;
+  const resultYear = req.body.year || req.params.year;
+  let resultMonth= req.body.month || req.params.month;
+  resultMonth = resultMonth ? resultMonth[0].toUpperCase() + resultMonth.substr(1, 2) : false;
+
+  let queryId = resultMonth && resultYear ? `${resultId}_${resultYear}_${resultMonth}`: resultId;
 
   dbQuery.retrieveDoc(resultId, resultDbUrl)
     .then(async(docHeaders) => {
-      const result = await dbQuery.getProcessedResults(resultId, resultDbUrl);
-      generateCSV(docHeaders, result);
-      res.json({ message: 'CSV Successfully Generated' });
+      const result = await dbQuery.getProcessedResults(queryId, resultDbUrl);
+      const csvFile = await generateCSV(docHeaders, result);
+      res.json({ message: 'CSV Successfully Generated', filepath: csvFile });
     })
-    .catch((err) => Error(err));
+    .catch((err) => err);
 }
 
 /**
@@ -64,34 +70,37 @@ exports.generate = (req, res) => {
  */
 
 const generateCSV = function(columnData, resultData) {
-  let workbook = new Excel.Workbook();
-  workbook.creator = 'Brockman';
-  workbook.lastModifiedBy = 'Matthew';
-  workbook.created = new Date(2017, 9, 1);
-  workbook.modified = new Date();
-  workbook.lastPrinted = new Date(2017, 7, 27);
+  return new Promise((resolve, reject) => {
+    let workbook = new Excel.Workbook();
+    workbook.creator = 'Brockman';
+    workbook.lastModifiedBy = 'Matthew';
+    workbook.created = new Date(2017, 9, 1);
+    workbook.modified = new Date();
+    workbook.lastPrinted = new Date(2017, 7, 27);
 
-  let excelSheet = workbook.addWorksheet('Workflow Sheet', {
-    views: [{ xSplit: 1 }], pageSetup: { paperSize: 9, orientation: 'landscape' }
+    let excelSheet = workbook.addWorksheet('Workflow Sheet', {
+      views: [{ xSplit: 1 }], pageSetup: { paperSize: 9, orientation: 'landscape' }
+    });
+
+    // Add column headers and define column keys
+    excelSheet.columns = columnData.column_headers;
+
+    // Add rows by key-value using the column keys
+    _.each(resultData, (row) => {
+      excelSheet.addRow(row.doc.processed_results);
+    });
+
+    let creationTime = new Date().toISOString();
+    let filename = `testcsvfile-${creationTime}.xlsx`;
+
+    // create and fill Workbook;
+    workbook.xlsx.writeFile(filename, 'utf8')
+      .then(() => {
+        console.log(chalk.green(`✓ You have successfully created a new excel file at ${new Date()}`));
+        resolve(filename);
+      })
+      .catch((err) => reject(err));
   });
-
-  // Add column headers and define column keys
-  excelSheet.columns = columnData.column_headers;
-
-  // Add rows by key-value using the column keys
-  _.each(resultData, (row) => {
-    excelSheet.addRow(row.doc.processed_results);
-  });
-
-  let creationTime = new Date().toISOString();
-  let filename = `testcsvfile-${creationTime}.xlsx`;
-
-  // create and fill Workbook;
-  workbook.xlsx.writeFile(filename, 'utf8')
-    .then(() => {
-      console.log(chalk.green(`✓ You have successfully created a new excel file at ${new Date()}`));
-    })
-    .catch((err) => Error(err));
 
 }
 

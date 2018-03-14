@@ -27,7 +27,9 @@ exports.getAllAssessment = (dbUrl) => {
       if (err) {
         reject(err);
       }
-      resolve(body.rows);
+      else {
+        resolve(body.rows);
+      }
     });
   });
 }
@@ -50,7 +52,9 @@ exports.getAllCurriculum = (dbUrl) => {
       if (err) {
         reject(err);
       }
-      resolve(body.rows);
+      else {
+        resolve(body.rows);
+      }
     });
   });
 }
@@ -73,7 +77,9 @@ exports.getAllWorkflow = (dbUrl) => {
       if (err) {
         reject(err);
       }
-      resolve(body.rows);
+      else {
+        resolve(body.rows);
+      }
     });
   });
 }
@@ -95,8 +101,10 @@ exports.getAllResult = (dbUrl) => {
       if (err) {
         reject(err);
       }
-      let resultCollection = _.map(body.rows, (data) => data.doc);
-      resolve(resultCollection);
+      else {
+        let resultCollection = _.map(body.rows, (data) => data.doc);
+        resolve(resultCollection);
+      }
     });
   });
 }
@@ -117,7 +125,9 @@ exports.retrieveDoc = (docId, dbUrl) => {
       if (err) {
         reject(err);
       }
-      resolve(body);
+      else {
+        resolve(body);
+      }
     });
   });
 }
@@ -137,6 +147,8 @@ exports.saveHeaders = (doc, key, dbUrl) => {
   return new Promise((resolve, reject) => {
     RESULT_DB.get(key, (error, existingDoc) => {
       let docObj = { column_headers: doc };
+      docObj.updated_at = new Date().toISOString();
+
       // if doc exists update it using its revision number.
       if (!error) {
         docObj = _.assignIn(existingDoc, docObj);
@@ -145,7 +157,9 @@ exports.saveHeaders = (doc, key, dbUrl) => {
         if (err) {
           reject(err);
         }
-        resolve(body);
+        else {
+          resolve(body);
+        }
       });
     });
   });
@@ -168,6 +182,7 @@ exports.saveResult = (doc, dbUrl) => {
   delete doc.indexKeys;
 
   let docObj = {
+    updated_at: new Date().toISOString(),
     parent_id: cloneDoc.indexKeys.parent_id,
     result_time : cloneDoc.indexKeys.time,
     result_day : cloneDoc.indexKeys.day,
@@ -186,7 +201,9 @@ exports.saveResult = (doc, dbUrl) => {
         if (err) {
           reject(err);
         }
-        resolve(body);
+        else {
+          resolve(body);
+        }
       });
     });
   });
@@ -242,8 +259,10 @@ exports.getQuestionBySubtestId = (subtestId, dbUrl) => {
       if (err) {
         reject(err);
       }
-      let doc = _.map(body.rows, (data) => data.doc);
-      resolve(doc);
+      else {
+        let doc = _.map(body.rows, (data) => data.doc);
+        resolve(doc);
+      }
     });
   });
 }
@@ -267,7 +286,9 @@ exports.getProcessedResults = function (ref, dbUrl) {
       if (err) {
         reject(err);
       }
-      resolve(body.rows);
+      else {
+        resolve(body.rows);
+      }
     });
   });
 }
@@ -291,21 +312,23 @@ exports.getResults = function(id, dbUrl) {
       if (err) {
         reject(err);
       }
-      resolve(body.rows);
+      else {
+        resolve(body.rows);
+      }
     });
   });
 }
 
 exports.checkUpdateSequence = (dbUrl) => {
-  let url = dbUrl + '?_changes';
   const DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     DB.get('last_update_sequence', (err, obj) => {
       if (err) {
         reject(err);
       }
-      console.log(obj);
-      resolve(obj);
+      else {
+        resolve(obj);
+      }
     });
   });
 };
@@ -321,7 +344,9 @@ exports.saveUpdateSequence = (dbUrl, doc) => {
         if (err) {
           reject(err);
         }
-        resolve(body);
+        else {
+          resolve(body);
+        }
       });
     });
   });
@@ -336,7 +361,9 @@ exports.processedResultsById = function (req, res) {
     if (err) {
       res.send(err);
     }
-    res.json(body.rows);
+    else {
+      res.json(body.rows);
+    }
   });
 }
 
@@ -357,7 +384,9 @@ exports.getUserDetails = function (enumerator, dbUrl) {
       if (err) {
         reject(err);
       }
-      resolve(body);
+      else {
+        resolve(body);
+      }
     });
   });
 }
@@ -377,7 +406,22 @@ exports.getLocationList = function (dbUrl) {
       if (err) {
         reject(err);
       }
-      resolve(body);
+      else {
+        resolve(body);
+      }
+    });
+  });
+}
+
+
+exports.getSettings = function (dbUrl) {
+  const BASE_DB = nano(dbUrl);
+  return new Promise((resolve, reject) => {
+    BASE_DB.get('settings', (err, body) => {
+      if(err)
+        reject(err)
+      else
+        resolve(body);
     });
   });
 }

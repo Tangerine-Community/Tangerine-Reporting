@@ -27,6 +27,7 @@ app.set('port', 5555);
 app.use(logger('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
+app.use(express.static(__dirname + '/public'));
 
 /**
  * Controllers.
@@ -47,43 +48,59 @@ const tripController = require('./controllers/trip');
 const dbConfig = require('./config');
 const dbQuery = require('./utils/dbQuery');
 const processChangedDocument = require('./controllers/changes').processChangedDocument;
-
-// TODO: Uncomment all commented code to start processing from last update sequence
-// const checkUpdateSequence = require('./utils/dbQuery').checkUpdateSequence
-// let seq = await checkUpdateSequence(resultDbUrl);
+const generateCSV = require('./controllers/generate_csv').generateCSV;
 
 const BASE_DB = nano(dbConfig.base_db);
 const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 
-feed.on('change', async(resp) => {
+feed.on('change', (resp) => {
   feed.pause();
   processChangedDocument(resp, dbConfig.base_db, dbConfig.result_db);
   setTimeout(function() { feed.resume() }, 500);
 });
 
-feed.on('error', (err) => Error(err));
+feed.on('error', (err) => err);
 feed.follow();
 
 /**
  * App routes.
  */
 
+app.get('/', (req, res) => res.render('index'));
+
+app.post('/', (req, res) => {
+  const resultDbUrl =  dbConfig.result_db;
+  const resultId = req.body.workflowId;
+  const resultYear = req.body.year;
+  let resultMonth = req.body.month;
+  resultMonth = resultMonth ? resultMonth : false;
+
+  let queryId = resultMonth && resultYear ? `${resultId}_${resultYear}_${resultMonth}` : resultId;
+
+  dbQuery.retrieveDoc(resultId, resultDbUrl)
+    .then(async (docHeaders) => {
+      const result = await dbQuery.getProcessedResults(queryId, resultDbUrl);
+      const csvFile = await generateCSV(docHeaders, result);
+      const downloadFile = __dirname + `/${csvFile}`;
+      res.download(downloadFile);
+    })
+    .catch((err) => res.send(err));
+});
+
 app.post('/assessment', assessmentController.all);
 app.post('/assessment/headers/all', assessmentController.generateAll);
 app.post('/assessment/headers/:id', assessmentController.generateHeader);
 
 app.post('/result', resultController.all);
-app.post('/assessment/result/all', resultController.processAll);
 app.post('/assessment/result/:id', resultController.processResult);
 
 app.post('/workflow', workflowController.all);
 app.post('/workflow/headers/all', workflowController.generateAll);
 app.post('/workflow/headers/:id', workflowController.generateHeader);
 
-app.post('/workflow/result/all', tripController.processAll);
 app.post('/workflow/result/:id', tripController.processResult);
 
-app.post('/generate_csv/:id', csvController.generate);
+app.post('/generate_csv/:id/:year?/:month?', csvController.generate);
 app.post('/tangerine_changes', changesController.changes);
 app.post('/get_processed_results/:id', dbQuery.processedResultsById);
 

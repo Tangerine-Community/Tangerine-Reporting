@@ -57,7 +57,7 @@ const dbQuery = require('./../utils/dbQuery');
 exports.all = (req, res) => {
   dbQuery.getAllWorkflow(req.body.base_db)
     .then((data) => res.json({ count: data.length, workflows: data }))
-    .catch((err) => res.json(Error(err)));
+    .catch((err) => res.json(err));
 }
 
 /**
@@ -97,9 +97,10 @@ exports.generateHeader = (req, res) => {
     .then(async(doc) => {
       let colHeaders = await createWorkflowHeaders(doc, dbUrl);
       const saveResponse = await dbQuery.saveHeaders(colHeaders, workflowId, resultDbUrl);
-      res.json(saveResponse);
+      console.log(saveResponse);
+      res.json(colHeaders);
     })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 /**
@@ -144,7 +145,7 @@ exports.generateAll = (req, res) => {
       }
       res.json(saveResponse);
     })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 
@@ -172,17 +173,15 @@ const createWorkflowHeaders = async function(data, dbUrl) {
   for (item of data.children) {
     let isProcessed = _.filter(workflowItems, {typesId: item.typesId});
     item.workflowId = data._id;
+    // this part is needed to avoid processing duplicates.
+    let isCurriculumProcessed = item.type === 'curriculum' & !isProcessed.length;
 
-    if (item.type === 'assessment') {
+    if (item.type === 'assessment' || isCurriculumProcessed) {
       let assessmentHeaders = await createColumnHeaders(item, count, dbUrl);
       workflowHeaders.push(assessmentHeaders);
       count++;
     }
-    if (item.type === 'curriculum' & !isProcessed.length) {
-      let curriculumHeaders = await createColumnHeaders(item, count, dbUrl);
-      workflowHeaders.push(curriculumHeaders);
-      count++;
-    }
+
     if (item.type === 'message') {
       let messageSuffix = messageCount > 0 ? `_${messageCount}` : '';
       workflowHeaders.push({ header: `message${messageSuffix}`, key: `${data._id}.message${messageSuffix}` });

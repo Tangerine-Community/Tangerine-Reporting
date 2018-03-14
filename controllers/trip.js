@@ -9,13 +9,15 @@
 
 const nano = require('nano');
 const _ = require('lodash');
-const Promise = require('bluebird');
+const moment = require('moment');
+moment().format();
 
 /**
  * Local dependencies.
  */
 
 const generateResult = require('./result').generateResult;
+const validateResult = require('./result').validateResult;
 const dbQuery = require('./../utils/dbQuery');
 
 /**
@@ -53,67 +55,12 @@ exports.processResult = (req, res) => {
 
   dbQuery.getResults(tripId, dbUrl)
     .then(async(data) => {
-      let totalResult = {};
-      const result = await processWorkflowResult(data, dbUrl);
-      result.forEach(element => totalResult = Object.assign(totalResult, element));
+      const totalResult = await processWorkflowResult(data, dbUrl);
       const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
-      res.json(saveResponse);
+      console.log(saveResponse);
+      res.json(totalResult);
     })
-    .catch((err) => res.send(Error(err)));
-}
-
-/**
- * Process results for ALL workflows in the database.
- *
- * Example:
- *
- *    POST /workflow/result/_all
- *
- *  The request object must contain the main database url and a
- *  result database url where the generated headers will be saved.
- *     {
- *       "db_url": "http://admin:password@test.tangerine.org/database_name"
- *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
- *     }
- *
- * Response:
- *
- *   Returns an Object indicating the data has been saved.
- *      {
- *        "ok": true,
- *        "id": "a1234567890",
- *        "rev": "1-b123"
- *       }
- *
- * @param req - HTTP request object
- * @param res - HTTP response object
- */
-
-exports.processAll = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
-
-  dbQuery.getAllResult(dbUrl)
-    .then(async(data) => {
-      let saveResponse;
-      for (item of data) {
-        let resultDoc = [{ doc: item }];
-        let processedResult = {};
-        if (!item.tripId) {
-          let docId = item.assessmentId || item.curriculumId;
-          let assessmentResults = await generateResult(resultDoc, 0, dbUrl);
-          saveResponse = await dbQuery.saveResult(assessmentResults, resultDbUrl);
-          console.log(saveResponse);
-        } else {
-          let result = await processWorkflowResult(resultDoc, 0, dbUrl);
-          result.forEach(element => processedResult = Object.assign(processedResult, element));
-          saveResponse = await dbQuery.saveResult(processedResult, resultDbUrl);
-          console.log(saveResponse);
-        }
-      }
-      res.json(saveResponse);
-    })
-    .catch((err) => res.send(Error(err)));
+    .catch((err) => res.send(err));
 }
 
 
@@ -133,8 +80,44 @@ exports.processAll = (req, res) => {
  */
 
 const processWorkflowResult = function (data, dbUrl) {
-  return Promise.map(data, (item, index) => {
-    return generateResult(item, index, dbUrl);
+  const tripPromise = () => data.map((item, index) => {
+    let itemId = item.doc.workflowId ||item.doc.assessmentId ||item.doc.curriculumId;
+    if (itemId != undefined) {
+      return generateResult(item, index, dbUrl);
+    }
+  });
+
+  // Processing trip results and validate them
+  return Promise.all(tripPromise()).then(async (body) => {
+    let totalResult = {};
+    let result = { indexKeys: {} };
+    let docId = body[0].indexKeys.collectionId;
+    let groupTimeZone = body[0].indexKeys.groupTimeZone;
+
+    let allTimestamps = _.chain(body)
+      .map(el => el && el.indexKeys.timestamps)
+      .filter(val => val != null || undefined)
+      .flatten()
+      .sortBy()
+      .value();
+
+    // Validate result from all subtest timestamps
+    let validationData = await validateResult(docId, groupTimeZone, dbUrl, allTimestamps);
+    result.isValid = validationData.isValid;
+    result.isValidReason = validationData.reason;
+    result[`${docId}.start_time`] = validationData.startTime;
+    result[`${docId}.end_time`] = validationData.endTime;
+
+    result.indexKeys.ref = body[0].indexKeys.ref;
+    result.indexKeys.parent_id = docId;
+    result.indexKeys.year = validationData.indexKeys.year;
+    result.indexKeys.month = validationData.indexKeys.month;
+    result.indexKeys.day = validationData.indexKeys.day;
+
+    body.push(result);
+    body.forEach(element => (totalResult = Object.assign(totalResult, element)));
+
+    return totalResult;
   });
 }
 
