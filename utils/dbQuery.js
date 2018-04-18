@@ -151,7 +151,9 @@ exports.saveHeaders = (doc, key, dbUrl) => {
 
       // if doc exists update it using its revision number.
       if (!error) {
-        docObj = _.assignIn(existingDoc, docObj);
+        let docHeaders = _.unionBy(existingDoc.column_headers, docObj.column_headers, 'header');
+        docObj.column_headers = docHeaders;
+        docObj._rev = existingDoc._rev;
       }
       RESULT_DB.insert(docObj, key, (err, body) => {
         if (err) {
@@ -195,7 +197,7 @@ exports.saveResult = (doc, dbUrl) => {
     RESULT_DB.get(docKey, (error, existingDoc) => {
       // if doc exists update it using its revision number.
       if (!error) {
-        docObj = _.assignIn(existingDoc, docObj);
+        docObj = _.merge(existingDoc, docObj);
       }
       RESULT_DB.insert(docObj, docKey, (err, body) => {
         if (err) {
@@ -302,7 +304,7 @@ exports.getProcessedResults = function (ref, dbUrl) {
  * @returns {Array} - result documents.
  */
 
-exports.getResults = function(id, dbUrl) {
+exports.getTripResults = function(id, dbUrl) {
   const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('dashReporting', 'byTripId', {

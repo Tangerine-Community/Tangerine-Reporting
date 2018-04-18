@@ -181,7 +181,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
   let assessmentSuffix = count > 0 ? `_${count}` : '';
   let resultCollections = _.isArray(collections) ? collections : [collections];
   let dbSettings = await dbQuery.getSettings(dbUrl);
-  let groupTimeZone = dbSettings.timeZone;
+  let groupTimeZone = dbSettings.timeZone || 0;
 
   for (let [index, data] of resultCollections.entries()) {
     collection = data.doc;
@@ -213,49 +213,49 @@ const generateResult = async function(collections, count = 0, dbUrl) {
         timestamps.push(doc.timestamp);
         if (doc.prototype === 'location') {
           let location = await processLocationResult(doc, subtestCount, groupTimeZone, dbUrl);
-          result = _.assignIn(result, location);
+          result = _.merge(result, location);
           subtestCount.locationCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'datetime') {
           let datetime = processDatetimeResult(doc, subtestCount, groupTimeZone);
-          result = _.assignIn(result, datetime);
+          result = _.merge(result, datetime);
           subtestCount.datetimeCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'consent') {
           let consent = processConsentResult(doc, subtestCount, groupTimeZone);
-          result = _.assignIn(result, consent);
+          result = _.merge(result, consent);
           subtestCount.consentCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'id') {
           let id = processIDResult(doc, subtestCount, groupTimeZone);
-          result = _.assignIn(result, id);
+          result = _.merge(result, id);
           subtestCount.idCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'survey') {
           let survey = processSurveyResult(doc, subtestCount, groupTimeZone);
-          result = _.assignIn(result, survey);
+          result = _.merge(result, survey);
           subtestCount.surveyCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'grid') {
           let grid = processGridResult(doc, subtestCount, groupTimeZone, assessmentSuffix);
-          result = _.assignIn(result, grid);
+          result = _.merge(result, grid);
           subtestCount.gridCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'gps') {
           let gps = processGpsResult(doc, subtestCount, groupTimeZone);
-          result = _.assignIn(result, gps);
+          result = _.merge(result, gps);
           subtestCount.gpsCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'camera') {
           let camera = processCamera(doc, subtestCount, groupTimeZone);
-          result = _.assignIn(result, camera);
+          result = _.merge(result, camera);
           subtestCount.cameraCount++;
           subtestCount.timestampCount++;
         }
@@ -275,12 +275,15 @@ const generateResult = async function(collections, count = 0, dbUrl) {
     result.indexKeys = indexKeys;
 
     // Include user metadata
-    let username = `user-${enumeratorName}`;
-    let userDetails = await dbQuery.getUserDetails(username, dbUrl);
-    result[`${collectionId}.userRole`] = userDetails.role;
-    result[`${collectionId}.mPesaNumber`] = userDetails.mPesaNumber;
-    result[`${collectionId}.phoneNumber`] = userDetails.phoneNumber || userDetails.phone;
-    result[`${collectionId}.fullName`] = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
+    try {
+      let userDetails = await dbQuery.getUserDetails(enumeratorName, dbUrl);
+      result[`${collectionId}.userRole`] = userDetails.role;
+      result[`${collectionId}.mPesaNumber`] = userDetails.mPesaNumber;
+      result[`${collectionId}.phoneNumber`] = userDetails.phoneNumber || userDetails.phone;
+      result[`${collectionId}.fullName`] = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
+    } catch (err) {
+      console.error({ message: 'Could not find user metadata', reason: err.message });
+    }
   }
 
   return result;
@@ -306,14 +309,24 @@ async function processLocationResult(body, subtestCount, groupTimeZone, dbUrl) {
   let i, locationResult = {};
   let locSuffix = count > 0 ? `_${count}` : '';
   let subtestId = body.subtestId;
-  let locationNames = await getLocationName(body, dbUrl);
-  let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
+  let locLabels = body.data.labels;
+  let locationData = body.data.location;
 
-  locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/\s/g,'-');
-  locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/\s/g,'-');
-  locationResult[`${subtestId}.zone${locSuffix}`] = locationNames.zone.label.replace(/\s/g,'-');
-  locationResult[`${subtestId}.school${locSuffix}`] = locationNames.school.label.replace(/\s/g,'-');
-  locationResult[`${subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  if (locLabels.length == 0 || locLabels[0] == '') {
+    let locationNames = await getLocationName(body, dbUrl);
+    let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
+
+    locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/\s/g,'-');
+    locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/\s/g,'-');
+    locationResult[`${subtestId}.zone${locSuffix}`] = locationNames.zone.label.replace(/\s/g,'-');
+    locationResult[`${subtestId}.school${locSuffix}`] = locationNames.school.label.replace(/\s/g,'-');
+    locationResult[`${subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  }
+  else {
+    for (i = 0; i < locLabels.length; i++) {
+      locationResult[`${subtestId}.${locLabels[i]}`] = locationData[i];
+    }
+  }
 
   return locationResult;
 }
@@ -466,14 +479,12 @@ function processSurveyResult(body, subtestCount, groupTimeZone) {
   let count = subtestCount.surveyCount;
   let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
   let surveyResult = {};
-  let response = [];
 
   for (doc in body.data) {
     if (typeof body.data[doc] === 'object') {
       for (item in body.data[doc]) {
         let surveyValue = translateSurveyValue(body.data[doc][item]);
-        response.push(surveyValue);
-        surveyResult[`${body.subtestId}.${doc}`] = response.join(',');
+        surveyResult[`${body.subtestId}.${doc}_${item}`] = surveyValue;
       }
     } else {
       let value = translateSurveyValue(body.data[doc]);
@@ -510,9 +521,9 @@ function processGridResult(body, subtestCount, groupTimeZone, assessmentSuffix) 
   gridResult[`${subtestId}.${varName}_time_intermediate_captured${suffix}`] = body.data.time_intermediate_captured;
   gridResult[`${subtestId}.${varName}_time_allowed${suffix}`] = body.data.time_allowed;
 
-  for (doc of body.data.items) {
+  for (let [index, doc] of body.data.items.entries()) {
     let gridValue = doc.itemResult === 'correct' ? translateGridValue(doc.itemResult) : 0;
-    gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = gridValue;
+    gridResult[`${subtestId}.${varName}_${index + 1}`] = gridValue;
     correctSum += +gridValue;
   }
 
