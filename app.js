@@ -68,7 +68,7 @@ feed.follow();
 
 app.get('/', (req, res) => res.render('index'));
 
-app.post('/', (req, res) => {
+app.post('/download_csv', (req, res) => {
   const resultDbUrl =  dbConfig.result_db;
   const resultId = req.body.workflowId;
   const resultYear = req.body.year;
@@ -78,13 +78,12 @@ app.post('/', (req, res) => {
   let queryId = resultMonth && resultYear ? `${resultId}_${resultYear}_${resultMonth}` : resultId;
 
   dbQuery.retrieveDoc(resultId, resultDbUrl)
-    .then(async (docHeaders) => {
+    .then(async docHeaders => {
       const result = await dbQuery.getProcessedResults(queryId, resultDbUrl);
-      const csvFile = await generateCSV(docHeaders, result);
-      const downloadFile = __dirname + `/${csvFile}`;
-      res.download(downloadFile);
+      generateCSV(docHeaders, result, res);
     })
-    .catch((err) => res.send(err));
+    .catch(err => res.send(err));
+
 });
 
 app.post('/assessment', assessmentController.all);

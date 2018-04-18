@@ -146,8 +146,11 @@ exports.saveHeaders = (doc, key, dbUrl) => {
   const RESULT_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     RESULT_DB.get(key, (error, existingDoc) => {
-      let docObj = { column_headers: doc };
-      docObj.updated_at = new Date().toISOString();
+      let docObj = {
+        name: doc.shift(),
+        updated_at: new Date().toISOString(),
+        column_headers: doc
+      };
 
       // if doc exists update it using its revision number.
       if (!error) {
@@ -369,7 +372,6 @@ exports.processedResultsById = function (req, res) {
   });
 }
 
-
 /**
  * @description – This function retrieves enumerator information.
  *
@@ -414,7 +416,6 @@ exports.getLocationList = function (dbUrl) {
     });
   });
 }
-
 
 exports.getSettings = function (dbUrl) {
   const BASE_DB = nano(dbUrl);
