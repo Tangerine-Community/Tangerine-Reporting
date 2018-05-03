@@ -25,28 +25,30 @@ const resultDB = require('./../config').result_db;
  *
  * Example:
  *
- *    POST /generate_csv/:id
+ *    POST  /generate_csv/:id/:db_name/:year?/:month?
+ *    GET   /generate_csv/:id/:db_name/:year?/:month?
  *
  *  where id refers to the id of the generated document in the result database.
- *
- *  The request object must contain the result database url.
- *      {
- *        "result_db_url": "http://admin:password@test.tangerine.org/database_name"
- *      }
+ *  and db_name is the result database name
+ *  year and month are the respective year and month the result was conducted.
  *
  * Response:
  *
- *  Returns an object containing a success message.
+ *  Returns a csv file to be downloaded.
  *
  * @param req - HTTP request object
  * @param res - HTTP response object
  */
 
 exports.generate = (req, res) => {
-  const resultDbUrl = req.body.result_db ||resultDB;
-  const resultId = req.body.workflowId || req.params.id;
-  const resultYear = req.body.year || req.params.year;
-  let resultMonth = req.body.month || req.params.month;
+  let groupName = req.params.db_name || resultDB;
+  let resultDbUrl = groupName.includes('http') ? groupName : dbConfig.db_url + groupName + '-result';
+
+  let resultId = req.params.id || req.body.workflowId;
+  let resultYear = req.params.year || req.body.year;
+  let resultMonth = req.params.month || req.body.month;
+
+  resultMonth = resultMonth ? resultMonth : false;
   resultMonth = resultMonth ? resultMonth[0].toUpperCase() + resultMonth.substr(1, 2) : false;
 
   let queryId = resultMonth && resultYear ? `${resultId}_${resultYear}_${resultMonth}`: resultId;
@@ -83,7 +85,7 @@ const generateCSV = function(columnData, resultData, res) {
   excelSheet.columns = columnData.column_headers;
 
   // Add rows by key-value using the column keys
-  _.each(resultData, row => {
+  resultData.forEach(function(row) {
     excelSheet.addRow(row.doc.processed_results);
   });
 
