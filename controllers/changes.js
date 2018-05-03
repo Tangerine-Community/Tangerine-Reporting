@@ -8,7 +8,8 @@
  * Module Dependencies.
  */
 
-const _ = require('lodash');
+
+const sortBy = require('lodash').sortBy;
 const nano = require('nano');
 
 /**
@@ -59,15 +60,40 @@ exports.changes = async(req, res) => {
   const BASE_DB = nano(dbUrl);
   const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 
-  feed.on('change', async(resp) => {
+  feed.on('change', (body) => {
     feed.pause();
-    processChangedDocument(resp, dbUrl, resultDbUrl);
+    queueProcessChangedDocument({ body, dbUrl, resultDbUrl });
     setTimeout(function() { feed.resume() }, 500);
   });
 
   feed.on('error', (err) => res.send(err));
   feed.follow();
 }
+
+var queue = [];
+var isProcessing = false;
+const queueProcessChangedDocument = async function(job) {
+  queue.push(job);
+};
+
+var sleep = delay => {
+  return new Promise(res => {
+    setTimeout(res, delay);
+  });
+};
+
+let startQueue = async () => {
+  while (true) {
+    await sleep(200);
+    if (queue.length > 0) {
+      let job = queue.shift();
+      await processChangedDocument(job.body, job.dbUrl, job.resultDbUrl);
+    }
+  }
+};
+
+startQueue();
+
 
 const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const assessmentId = resp.doc.assessmentId || resp.doc._id;
@@ -103,7 +129,7 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
       let assessmentResult = await processAssessmentResult([resp], 0, dbUrl);
       let docId = assessmentResult.indexKeys.collectionId;
       let groupTimeZone = assessmentResult.indexKeys.groupTimeZone;
-      let allTimestamps = _.sortBy(assessmentResult.indexKeys.timestamps);
+      let allTimestamps = sortBy(assessmentResult.indexKeys.timestamps);
 
       // Validate result from all subtest timestamps
       let validationData = await validateResult(docId, groupTimeZone, dbUrl, allTimestamps);
