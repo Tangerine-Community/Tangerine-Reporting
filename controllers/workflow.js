@@ -7,8 +7,8 @@
  * Module dependencies
  */
 
-const _ = require('lodash');
-const nano = require('nano');
+const filter = require('lodash').filter;
+const flatten = require('lodash').flatten;
 
 /**
  * Local modules
@@ -173,7 +173,7 @@ const createWorkflowHeaders = async function(data, dbUrl) {
   workflowHeaders.push(data.name);  // Add Workflow name. Needed for csv file name
 
   for (item of data.children) {
-    let isProcessed = _.filter(workflowItems, {typesId: item.typesId});
+    let isProcessed = filter(workflowItems, {typesId: item.typesId});
     item.workflowId = data._id;
     // this part is needed to avoid processing duplicates.
     let isCurriculumProcessed = item.type === 'curriculum' & !isProcessed.length;
@@ -191,7 +191,7 @@ const createWorkflowHeaders = async function(data, dbUrl) {
     }
     workflowItems.push(item);
   }
-  workflowHeaders = _.flatten(workflowHeaders);
+  workflowHeaders = flatten(workflowHeaders);
 
   return workflowHeaders;
 }

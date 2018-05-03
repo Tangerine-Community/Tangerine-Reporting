@@ -8,9 +8,7 @@
  */
 
 const nano = require('nano');
-const _ = require('lodash');
-const moment = require('moment');
-moment().format();
+const chain = require('lodash').chain;
 
 /**
  * Local dependencies.
@@ -94,7 +92,7 @@ const processWorkflowResult = function (data, dbUrl) {
     let docId = body[0].indexKeys.collectionId;
     let groupTimeZone = body[0].indexKeys.groupTimeZone;
 
-    let allTimestamps = _.chain(body)
+    let allTimestamps = chain(body)
       .map(el => el && el.indexKeys.timestamps)
       .filter(val => val != null || undefined)
       .flatten()

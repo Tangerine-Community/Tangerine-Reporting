@@ -9,9 +9,7 @@
  * Module dependencies.
  */
 
-const _ = require('lodash');
-const Excel = require('exceljs');
-const nano = require('nano');
+const sortBy = require('lodash').sortBy;
 
 /**
  * Local dependency.
@@ -376,7 +374,7 @@ function createId(doc, subtestCount) {
 async function createSurvey(id, subtestCount, dbUrl) {
   let surveyHeader = [];
   let questions = await dbQuery.getQuestionBySubtestId(id, dbUrl);
-  let sortedDoc = _.sortBy(questions, [id, 'order']);
+  let sortedDoc = sortBy(questions, [id, 'order']);
 
   for (doc of sortedDoc) {
     if (doc.type == 'multiple') {

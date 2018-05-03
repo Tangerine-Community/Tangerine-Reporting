@@ -213,49 +213,49 @@ const generateResult = async function(collections, count = 0, dbUrl) {
         timestamps.push(doc.timestamp);
         if (doc.prototype === 'location') {
           let location = await processLocationResult(doc, subtestCount, groupTimeZone, dbUrl);
-          result = _.merge(result, location);
+          result = _.assignIn(result, location);
           subtestCount.locationCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'datetime') {
           let datetime = processDatetimeResult(doc, subtestCount, groupTimeZone);
-          result = _.merge(result, datetime);
+          result = _.assignIn(result, datetime);
           subtestCount.datetimeCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'consent') {
           let consent = processConsentResult(doc, subtestCount, groupTimeZone);
-          result = _.merge(result, consent);
+          result = _.assignIn(result, consent);
           subtestCount.consentCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'id') {
           let id = processIDResult(doc, subtestCount, groupTimeZone);
-          result = _.merge(result, id);
+          result = _.assignIn(result, id);
           subtestCount.idCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'survey') {
           let survey = processSurveyResult(doc, subtestCount, groupTimeZone);
-          result = _.merge(result, survey);
+          result = _.assignIn(result, survey);
           subtestCount.surveyCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'grid') {
           let grid = processGridResult(doc, subtestCount, groupTimeZone, assessmentSuffix);
-          result = _.merge(result, grid);
+          result = _.assignIn(result, grid);
           subtestCount.gridCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'gps') {
           let gps = processGpsResult(doc, subtestCount, groupTimeZone);
-          result = _.merge(result, gps);
+          result = _.assignIn(result, gps);
           subtestCount.gpsCount++;
           subtestCount.timestampCount++;
         }
         if (doc.prototype === 'camera') {
           let camera = processCamera(doc, subtestCount, groupTimeZone);
-          result = _.merge(result, camera);
+          result = _.assignIn(result, camera);
           subtestCount.cameraCount++;
           subtestCount.timestampCount++;
         }
@@ -275,8 +275,9 @@ const generateResult = async function(collections, count = 0, dbUrl) {
     result.indexKeys = indexKeys;
 
     // Include user metadata
+    let username = `user-${enumeratorName}`;
     try {
-      let userDetails = await dbQuery.getUserDetails(enumeratorName, dbUrl);
+      let userDetails = await dbQuery.getUserDetails(username, dbUrl);
       result[`${collectionId}.userRole`] = userDetails.role;
       result[`${collectionId}.mPesaNumber`] = userDetails.mPesaNumber;
       result[`${collectionId}.phoneNumber`] = userDetails.phoneNumber || userDetails.phone;
@@ -300,6 +301,8 @@ const generateResult = async function(collections, count = 0, dbUrl) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
+ * @param {string} dbUrl - base database url.
  *
  * @returns {Object} processed location data.
  */
@@ -408,6 +411,7 @@ async function getLocationName(body, dbUrl) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed datetime data.
  */
@@ -431,6 +435,7 @@ function processDatetimeResult(body, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed consent data.
  */
@@ -451,6 +456,7 @@ function processConsentResult(body, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed id data.
  */
@@ -471,6 +477,7 @@ function processIDResult(body, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed survey data.
  */
@@ -501,6 +508,8 @@ function processSurveyResult(body, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
+ * @param {number} assessmentSuffix - assessment count.
  *
  * @returns {Object} processed grid data.
  */
@@ -539,6 +548,7 @@ function processGridResult(body, subtestCount, groupTimeZone, assessmentSuffix) 
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed gps data.
  */
@@ -565,6 +575,7 @@ function processGpsResult(doc, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed camera data.
  */
