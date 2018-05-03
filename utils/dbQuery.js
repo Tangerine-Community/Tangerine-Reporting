@@ -174,7 +174,6 @@ exports.saveHeaders = (doc, key, dbUrl) => {
  * This function saves/updates processed result in the result database.
  *
  * @param {Object} doc - document to be saved.
- * @param {string} key - key for indexing.
  * @param {string} dbUrl - url of the result database.
  *
  * @returns {Object} - saved document.
