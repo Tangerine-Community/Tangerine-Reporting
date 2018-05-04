@@ -261,7 +261,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
         }
         if (doc.prototype === 'complete') {
           let endTimestamp = convertToTimeZone(doc.data.end_time, groupTimeZone);
-          result[`${collectionId}.end_time${assessmentSuffix}`] = moment(endTimestamp).format('hh:mm');
+          result[`${collectionId}.end_time${assessmentSuffix}`] = endTimestamp;
         }
       }
     }
@@ -315,12 +315,11 @@ async function processLocationResult(body, subtestCount, groupTimeZone, dbUrl) {
   let locLabels = body.data.labels;
   let locationData = body.data.location;
   let schoolId = body.data.schoolId;
+  let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
 
   if (!schoolId || locLabels.length == 0 || locLabels[0] == '') {
     let locationNames = await getLocationName(body, dbUrl);
-    let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
     let locKeys = Object.keys(locationNames);
-
     for (j = 0; j < locKeys.length; j++) {
       let key = locKeys[j];
       locationResult[`${subtestId}.${locKeys[j]}${locSuffix}`] = locationNames[key].label.replace(/\s/g,'-');
@@ -331,6 +330,7 @@ async function processLocationResult(body, subtestCount, groupTimeZone, dbUrl) {
       locationResult[`${subtestId}.${locLabels[i]}`] = locationData[i];
     }
   }
+  locationResult[`${subtestId}.timestamp_${subtestCount.locationCount}`] = timestamp;
 
   return locationResult;
 }
@@ -426,7 +426,7 @@ function processDatetimeResult(body, subtestCount, groupTimeZone) {
     [`${body.subtestId}.month${suffix}`]: body.data.month,
     [`${body.subtestId}.day${suffix}`]: body.data.day,
     [`${body.subtestId}.assess_time${suffix}`]: body.data.time,
-    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: moment(timestamp).format('hh:mm')
+    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: timestamp
   }
   return datetimeResult;
 }
@@ -447,7 +447,7 @@ function processConsentResult(body, subtestCount, groupTimeZone) {
 
   consentResult = {
     [`${body.subtestId}.consent${suffix}`]: body.data.consent,
-    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: moment(timestamp).format('hh:mm')
+    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: timestamp
   };
   return consentResult;
 }
@@ -468,7 +468,7 @@ function processIDResult(body, subtestCount, groupTimeZone) {
 
   idResult = {
     [`${body.subtestId}.id${suffix}`]: body.data.participant_id,
-    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: moment(timestamp).format('hh:mm')
+    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: timestamp
   };
   return idResult;
 }
@@ -499,7 +499,7 @@ function processSurveyResult(body, subtestCount, groupTimeZone) {
       surveyResult[`${body.subtestId}.${doc}`] = value;
     }
   }
-  surveyResult[`${body.subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  surveyResult[`${body.subtestId}.timestamp_${subtestCount.timestampCount}`] = timestamp;
 
   return surveyResult;
 }
@@ -539,7 +539,7 @@ function processGridResult(body, subtestCount, groupTimeZone, assessmentSuffix) 
 
   let fluencyRate = Math.round(correctSum / (1 - body.data.time_remain / body.data.time_allowed));
   gridResult[`${subtestId}.fluency_rate${assessmentSuffix}`] = fluencyRate;
-  gridResult[`${subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  gridResult[`${subtestId}.timestamp_${subtestCount.timestampCount}`] = timestamp;
 
   return gridResult;
 }
@@ -566,7 +566,7 @@ function processGpsResult(doc, subtestCount, groupTimeZone) {
   gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altAcc;
   gpsResult[`${doc.subtestId}.heading${suffix}`] = doc.data.heading;
   gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
-  gpsResult[`${doc.subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  gpsResult[`${doc.subtestId}.timestamp_${subtestCount.timestampCount}`] = timestamp;
 
   return gpsResult;
 }
@@ -589,7 +589,7 @@ function processCamera(body, subtestCount, groupTimeZone) {
 
   cameraResult[`${body.subtestId}.${varName}_photo_captured${suffix}`] = body.data.imageBase64;
   cameraResult[`${body.subtestId}.${varName}_photo_url${suffix}`] = body.data.imageBase64;
-  cameraResult[`${body.subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  cameraResult[`${body.subtestId}.timestamp_${subtestCount.timestampCount}`] = timestamp;
 
   return cameraResult;
 }
