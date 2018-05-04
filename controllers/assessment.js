@@ -275,17 +275,17 @@ const createColumnHeaders = function(doc, count = 0, dbUrl) {
 
 function createLocation(doc, subtestCount) {
   let count = subtestCount.locationCount;
+  let locSuffix = count > 0 ? `_${count}` : '';
   let i, locationHeader = [];
   let locLevels = doc.levels;
   let isLocLevelSet = locLevels && locLevels.length != 0;
 
   if (isLocLevelSet) {
     for (i = 0; i < locLevels.length; i++) {
-      let locSuffix = count > 0 ? `_${count}` : '';
       if (locLevels[i] != '') {
         locationHeader.push({
-          header: `${locLevels[i]}${locSuffix}`,
-          key: `${doc._id}.${locLevels[i]}${locSuffix}`
+          header: `${locLevels[i]}`,
+          key: `${doc._id}.${locLevels[i]}`
         });
       }
     }
