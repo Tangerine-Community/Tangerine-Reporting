@@ -154,8 +154,9 @@ exports.saveHeaders = (doc, key, dbUrl) => {
 
       // if doc exists update it using its revision number.
       if (!error) {
-        let docHeaders = _.unionBy(existingDoc.column_headers, docObj.column_headers, 'header');
-        docObj.column_headers = docHeaders;
+        let joinByHeader = _.unionBy(existingDoc.column_headers, docObj.column_headers, 'header');
+        let joinBykey = _.unionBy(existingDoc.column_headers, docObj.column_headers, 'key');
+        docObj.column_headers = _.union(joinByHeader, joinBykey);
         docObj._rev = existingDoc._rev;
       }
       RESULT_DB.insert(docObj, key, (err, body) => {
