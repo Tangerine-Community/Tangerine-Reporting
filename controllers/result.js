@@ -261,7 +261,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
         }
         if (doc.prototype === 'complete') {
           let endTimestamp = convertToTimeZone(doc.data.end_time, groupTimeZone);
-          result[`${collectionId}.end_time${assessmentSuffix}`] = endmoment(timestamp).format('hh:mm');
+          result[`${collectionId}.end_time${assessmentSuffix}`] = moment(timestamp).format('hh:mm');
         }
       }
     }
