@@ -8,7 +8,6 @@
  * Module dependencies
  */
 
-const _ = require('lodash');
 const chalk = require('chalk');
 const Excel = require('exceljs');
 const nano = require('nano');
@@ -42,7 +41,7 @@ const resultDB = require('./../config').resultDb;
 
 exports.generate = (req, res) => {
   let groupName = req.params.db_name || resultDB;
-  let resultDbUrl = groupName.includes('http') ? groupName : dbConfig.db_url + groupName + '-result';
+  let resultDbUrl = groupName.includes('http') ? groupName : 'http://localhost:5984/' + groupName + '-result';
 
   let resultId = req.params.id || req.body.workflowId;
   let resultYear = req.params.year || req.body.year;
