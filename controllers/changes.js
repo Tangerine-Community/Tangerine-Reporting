@@ -63,7 +63,7 @@ exports.changes = async(req, res) => {
   feed.on('change', (body) => {
     feed.pause();
     queueProcessChangedDocument({ body, dbUrl, resultDbUrl });
-    setTimeout(function() { feed.resume() }, 500);
+    setTimeout(function() { feed.resume() }, 200);
   });
 
   feed.on('error', (err) => res.send(err));
@@ -94,6 +94,15 @@ let startQueue = async () => {
 
 startQueue();
 
+/** @description This function processess a document based on the
+ * collection type i.e. result, assessment, workflow, subtest, question
+ * and curriculum. This is usually called when a change happens in the base
+ * database and it is processed and saved in the result database.
+ *
+ * @param {Object} resp - changed document
+ * @param {string} dbUrl - base database url
+ * @param {string} resultDbUrl - result database url
+ */
 
 const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const assessmentId = resp.doc.assessmentId || resp.doc._id;
@@ -108,7 +117,7 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const isQuestion = (collectionType === 'question') ? true : false;
   const isSubtest = (collectionType === 'subtest') ? true : false;
 
-  console.info(`\n::: Processing ${collectionType} document on sequence ${resp.seq} :::\n`);
+  console.info(`\n::: Processing ${resp.doc.collection} document on sequence ${resp.seq} :::\n`);
 
   if (isWorkflowIdSet && isResult) {
     console.info('\n<<<=== START PROCESSING WORKFLOW RESULT ===>>>\n');
@@ -155,8 +164,9 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   if (isWorkflow) {
     try {
       console.info('\n<<<=== START PROCESSING WORKFLOW COLLECTION  ===>>>\n');
+      const docId = workflowId || resp.doc._id;
       const workflowHeaders = await generateWorkflowHeaders(resp.doc, dbUrl);
-      const saveResponse = await dbQuery.saveHeaders(workflowHeaders, workflowId, resultDbUrl);
+      const saveResponse = await dbQuery.saveHeaders(workflowHeaders, docId, resultDbUrl);
       console.log(saveResponse);
       console.info('\n<<<=== END PROCESSING WORKFLOW COLLECTION ===>>>\n');
     } catch (err) {
@@ -167,7 +177,9 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   if (isAssessment || isCurriculum || isQuestion || isSubtest) {
     try {
       console.info('\n<<<=== START PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>\n');
+      let assessmentDoc = await dbQuery.retrieveDoc(assessmentId, dbUrl);
       const assessmentHeaders = await generateAssessmentHeaders(resp.doc, 0, dbUrl);
+      assessmentHeaders.unshift(assessmentDoc.name); // Add assessment name. Needed for csv file name.
       const saveResponse = await dbQuery.saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
       console.log(saveResponse);
       console.info('\n<<<=== END PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION ===>>>\n');
