@@ -592,7 +592,7 @@ function processGpsResult(doc, subtestCount, groupTimeZone) {
 
 function processCamera(body, subtestCount, groupTimeZone) {
   let cameraResult = {};
-  let varName = body.data.variableName;
+  let varName = body.data.variableName || body.name;
   let suffix = subtestCount.cameraCount > 0 ? `_${subtestCount.cameraCount}` : '';
   let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
 
