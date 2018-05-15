@@ -61,6 +61,51 @@ exports.all = (req, res) => {
 }
 
 /**
+ * Generates headers for ALL assessment collections in a database
+ * and save them in a different database.
+ *
+ * Example:
+ *
+ *    POST /assessment/headers/all
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the generated header will be saved.
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *      }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+exports.generateAll = (req, res) => {
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
+
+  dbQuery.getAllAssessment(dbUrl)
+    .then(async (data) => {
+      for (item of data) {
+        let assessmentId = item.doc.assessmentId;
+        let generatedHeaders = await createColumnHeaders(item.doc, 0, dbUrl);
+        generatedHeaders.unshift(item.doc.name);
+        let saveResponse = await dbQuery.saveHeaders(generatedHeaders, assessmentId, resultDbUrl);
+        console.log(saveResponse);
+      }
+      res.json(data);
+    })
+    .catch((err) => res.send(err));
+}
+
+/**
  * Generates headers for an assessment and saves it in the database.
  *
  * Example:
@@ -100,53 +145,8 @@ exports.generateHeader = (req, res) => {
       let colHeaders = await createColumnHeaders(data, 0, dbUrl);
       colHeaders.unshift(data.name); // Add assessment name. Needed for csv file name.
       const saveResponse = await dbQuery.saveHeaders(colHeaders, docId, resultDbUrl);
-      res.json(saveResponse);
-    })
-    .catch((err) => res.send(err));
-}
-
-/**
- * Generates headers for ALL assessment collections in a database
- * and save them in a different database.
- *
- * Example:
- *
- *    POST /assessment/headers/_all
- *
- *  The request object must contain the main database url and a
- *  result database url where the generated header will be saved.
- *     {
- *       "db_url": "http://admin:password@test.tangerine.org/database_name"
- *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
- *     }
- *
- * Response:
- *
- *   Returns an Object indicating the data has been saved.
- *      {
- *        "ok": true,
- *        "id": "a1234567890",
- *        "rev": "1-b123"
- *      }
- *
- * @param req - HTTP request object
- * @param res - HTTP response object
- */
-exports.generateAll = (req, res) => {
-  const dbUrl = req.body.baseDb;
-  const resultDbUrl = req.body.resultDb;
-
-  dbQuery.getAllAssessment(dbUrl)
-    .then(async(data) => {
-      let saveResponse;
-
-      for (item of data) {
-        let assessmentId = item.doc.assessmentId;
-        let generatedHeaders = await createColumnHeaders(item.doc, 0, dbUrl);
-        saveResponse = await dbQuery.saveHeaders(generatedHeaders, assessmentId, resultDbUrl);
-        console.log(saveResponse);
-      }
-      res.json(saveResponse);
+      console.log(saveResponse);
+      res.json(colHeaders);
     })
     .catch((err) => res.send(err));
 }
