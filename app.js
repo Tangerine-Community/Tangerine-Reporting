@@ -109,24 +109,27 @@ app.post('/download_csv', (req, res) => {
 
 });
 
+// collection routes
 app.post('/assessment', assessmentController.all);
-app.post('/assessment/headers/all', assessmentController.generateAll);
-app.post('/assessment/headers/:id', assessmentController.generateHeader);
-
-app.post('/result', resultController.all);
-app.post('/assessment/result/:id', resultController.processResult);
-
 app.post('/workflow', workflowController.all);
+app.post('/result', resultController.all);
+
+// generate all headers routes at once
+app.post('/assessment/headers/all', assessmentController.generateAll);
 app.post('/workflow/headers/all', workflowController.generateAll);
+
+// generate headers routes
+app.post('/assessment/headers/:id', assessmentController.generateHeader);
 app.post('/workflow/headers/:id', workflowController.generateHeader);
 
+// process result routes
+app.post('/assessment/result/:id', resultController.processResult);
 app.post('/workflow/result/:id', tripController.processResult);
 
 app.get('/generate_csv/:id/:db_name/:year?/:month?', csvController.generate);
 app.post('/generate_csv/:id/:db_name/:year?/:month?', csvController.generate);
 
 app.post('/tangerine_changes', changesController.changes);
-app.post('/get_processed_results/:id', dbQuery.processedResultsById);
 
 
 /**

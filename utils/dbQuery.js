@@ -324,53 +324,6 @@ exports.getTripResults = function(id, dbUrl) {
   });
 }
 
-exports.checkUpdateSequence = (dbUrl) => {
-  const DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    DB.get('last_update_sequence', (err, obj) => {
-      if (err) {
-        reject(err);
-      }
-      else {
-        resolve(obj);
-      }
-    });
-  });
-};
-
-exports.saveUpdateSequence = (dbUrl, doc) => {
-  const DB = nano(dbUrl)
-  return new Promise((resolve, reject) => {
-    DB.get(doc.key, (error, seqDoc) => {
-      if (!error) {
-        doc._rev = seqDoc._rev;
-      }
-      DB.insert(doc, doc.key, (err, body) => {
-        if (err) {
-          reject(err);
-        }
-        else {
-          resolve(body);
-        }
-      });
-    });
-  });
-};
-
-exports.processedResultsById = function (req, res) {
-  const RESULT_DB = nano(req.body.resultDb);
-  RESULT_DB.view('dashReporting', 'byParentId', {
-    key: req.params.id,
-    include_docs: true
-  }, (err, body) => {
-    if (err) {
-      res.send(err);
-    }
-    else {
-      res.json(body.rows);
-    }
-  });
-}
 
 /**
  * @description – This function retrieves enumerator information.
