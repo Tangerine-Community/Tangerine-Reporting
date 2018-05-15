@@ -55,7 +55,7 @@ const dbQuery = require('./../utils/dbQuery');
  */
 
 exports.all = (req, res) => {
-  dbQuery.getAllAssessment(req.body.base_db)
+  dbQuery.getAllAssessment(req.body.baseDb)
     .then((data) => res.json({ count: data.length, assessments: data }))
     .catch((err) => res.send(err));
 }
@@ -90,8 +90,8 @@ exports.all = (req, res) => {
  */
 
 exports.generateHeader = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
   const assessmentId = req.params.id;
 
   dbQuery.retrieveDoc(assessmentId, dbUrl)
@@ -133,8 +133,8 @@ exports.generateHeader = (req, res) => {
  * @param res - HTTP response object
  */
 exports.generateAll = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
 
   dbQuery.getAllAssessment(dbUrl)
     .then(async(data) => {

@@ -44,8 +44,8 @@ async function generateAssessmentHeaders(data) {
   let response;
   for (item of data) {
     let assessmentId = item.doc.assessmentId;
-    let generatedHeaders = await createColumnHeaders(item.doc, 0, dbConfig.base_db);
-    response = await dbQuery.saveHeaders(generatedHeaders, assessmentId, dbConfig.result_db);
+    let generatedHeaders = await createColumnHeaders(item.doc, 0, dbConfig.baseDb);
+    response = await dbQuery.saveHeaders(generatedHeaders, assessmentId, dbConfig.resultDb);
     console.log(response);
   }
   return response;
@@ -63,8 +63,8 @@ async function generateworkflowHeaders(data) {
   let response;
   for (item of data) {
     let workflowId = item.id;
-    let generatedWorkflowHeaders = await createWorkflowHeaders(item.doc, dbConfig.base_db);
-    response = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, dbConfig.result_db);
+    let generatedWorkflowHeaders = await createWorkflowHeaders(item.doc, dbConfig.baseDb);
+    response = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, dbConfig.resultDb);
     console.log(response);
   }
   return response;
@@ -83,8 +83,8 @@ async function generateAssessmentResult(data) {
   for (item of data) {
     let docId = item.assessmentId || item.curriculumId;
     let ref = item._id;
-    let processedResult = await processAssessmentResult(docId, 0, dbConfig.base_db);
-    response = await dbQuery.saveResult(processedResult, ref, dbConfig.result_db);
+    let processedResult = await processAssessmentResult(docId, 0, dbConfig.baseDb);
+    response = await dbQuery.saveResult(processedResult, ref, dbConfig.resultDb);
     console.log(response);
   }
   return response;
@@ -130,7 +130,7 @@ tangerine
   .command('assessments')
   .description('Retrieves all assessments in the database')
   .action(async() => {
-    const db = dbConfig.base_db;
+    const db = dbConfig.baseDb;
     console.log(await dbQuery.getAllAssessment(db));
     console.log(chalk.green('✓ Successfully retrieve all assessments'));
   });
@@ -144,7 +144,7 @@ tangerine
   .command('workflows')
   .description('Retrieves all workflows in the database')
   .action(async() => {
-    const db = dbConfig.base_db;
+    const db = dbConfig.baseDb;
     console.log(await dbQuery.getAllWorkflow(db));
     console.log(chalk.green('✓ Successfully retrieve all workflows'));
   });
@@ -158,7 +158,7 @@ tangerine
   .command('results')
   .description('Retrieves all results in the database')
   .action(async() => {
-    const db = dbConfig.base_db;
+    const db = dbConfig.baseDb;
     console.log(await dbQuery.getAllResult(db));
     console.log(chalk.green('✓ Successfully retrieve all results'));
   });
@@ -174,11 +174,11 @@ tangerine
   .command('assessment-header <id>')
   .description('generate header for an assessment')
   .action((id) => {
-    dbQuery.retrieveDoc(id, dbConfig.base_db)
+    dbQuery.retrieveDoc(id, dbConfig.baseDb)
       .then(async(data) => {
         const docId = data.assessmentId || data.curriculumId;
-        const colHeaders = await createColumnHeaders(data, 0, dbConfig.base_db);
-        const saveResponse = await dbQuery.saveHeaders(colHeaders, docId, dbConfig.result_db);
+        const colHeaders = await createColumnHeaders(data, 0, dbConfig.baseDb);
+        const saveResponse = await dbQuery.saveHeaders(colHeaders, docId, dbConfig.resultDb);
         console.log(saveResponse);
         console.log(chalk.green('✓ Successfully generate and save assessment header'));
       })
@@ -196,11 +196,11 @@ tangerine
   .command('assessment-result <id>')
   .description('process result for an assessment')
   .action((id) => {
-    dbQuery.retrieveDoc(id, dbConfig.base_db)
+    dbQuery.retrieveDoc(id, dbConfig.baseDb)
       .then(async(data) => {
         let resultDoc = { doc: data };
         const result = processAssessmentResult(resultDoc);
-        const saveResponse = await dbQuery.saveResult(result, dbConfig.result_db);
+        const saveResponse = await dbQuery.saveResult(result, dbConfig.resultDb);
         console.log(saveResponse);
         console.log(chalk.green('✓ Successfully process and save assessment result'));
       })
@@ -218,10 +218,10 @@ tangerine
   .command('workflow-header <id>')
   .description('generate headers for a workflow')
   .action((id) => {
-    dbQuery.retrieveDoc(id, dbConfig.base_db)
+    dbQuery.retrieveDoc(id, dbConfig.baseDb)
       .then(async(doc) => {
-        let colHeaders = await createWorkflowHeaders(doc, dbConfig.base_db);
-        const saveResponse = await dbQuery.saveHeaders(colHeaders, id, dbConfig.result_db);
+        let colHeaders = await createWorkflowHeaders(doc, dbConfig.baseDb);
+        const saveResponse = await dbQuery.saveHeaders(colHeaders, id, dbConfig.resultDb);
         console.log(saveResponse);
         console.log(chalk.green('✓ Successfully generate and save workflow header'));
       })
@@ -239,10 +239,10 @@ tangerine
   .command('workflow-result <id>')
   .description('process result for a workflow')
   .action(function(id) {
-    dbQuery.getResults(id, dbConfig.base_db)
+    dbQuery.getResults(id, dbConfig.baseDb)
       .then(async(data) => {
         const result = processWorkflowResult(data);
-        const saveResponse = await dbQuery.saveResult(result, dbConfig.result_db);
+        const saveResponse = await dbQuery.saveResult(result, dbConfig.resultDb);
         console.log(saveResponse);
         console.log(chalk.green('✓ Successfully process and save workflow result'));
       })
@@ -269,28 +269,28 @@ tangerine
       console.log(chalk.red('Please select a flag either "-a", "-r", "-t", or "-w" flag along with your command. \n'));
     }
     if (options.A) {
-      dbQuery.getAllAssessment(dbConfig.base_db)
+      dbQuery.getAllAssessment(dbConfig.baseDb)
         .then(async(data) => {
           await generateAssessmentHeaders(data);
           console.log(chalk.green('✓ Successfully generate and save all assessment headers'));
         }).catch((err) => Error(err));
     }
     if (options.W) {
-      dbQuery.getAllWorkflow(dbConfig.base_db)
+      dbQuery.getAllWorkflow(dbConfig.baseDb)
         .then(async(data) => {
           await generateworkflowHeaders(data);
           console.log(chalk.green('✓ Successfully generate and save all workflow headers'));
         }).catch((err) => Error(err));
     }
     if (options.R) {
-      dbQuery.getAllResult(dbConfig.base_db)
+      dbQuery.getAllResult(dbConfig.baseDb)
         .then(async(data) => {
           await generateAssessmentResult(data);
           console.log(chalk.green('✓ Successfully processe and save all assessment results'));
         }).catch((err) => Error(err));
     }
     if (options.T) {
-      dbQuery.getAllWorkflow(dbConfig.base_db)
+      dbQuery.getAllWorkflow(dbConfig.baseDb)
         .then(async(data) => {
           await generateWorkflowResult(data);
           console.log(chalk.green('✓ Successfully generate and save all workflow results'));
@@ -315,9 +315,9 @@ tangerine
   .command('generate-csv <docId>')
   .description('creates a csv file')
   .action((docId) => {
-    dbQuery.retrieveDoc(docId, dbConfig.result_db)
+    dbQuery.retrieveDoc(docId, dbConfig.resultDb)
       .then(async(docHeaders) => {
-        const result = await dbQuery.getProcessedResults(docId, dbConfig.result_db);
+        const result = await dbQuery.getProcessedResults(docId, dbConfig.resultDb);
         await generateCSV(docHeaders, result);
         console.log(chalk.green('✓ CSV Successfully Generated'));
       })
@@ -335,7 +335,7 @@ tangerine
   .command('get <id>')
   .description('retrieve a document from the database')
   .action(function(id) {
-    dbQuery.retrieveDoc(id, dbConfig.base_db)
+    dbQuery.retrieveDoc(id, dbConfig.baseDb)
       .then((data) => {
         console.log(data);
         console.log(chalk.green('✓ Successfully get document'));
@@ -354,7 +354,7 @@ tangerine
   .command('get-processed-result <id>')
   .description('retrieve all processed results by id from the database')
   .action(function(id) {
-    dbQuery.getProcessedResults(id, dbConfig.result_db)
+    dbQuery.getProcessedResults(id, dbConfig.resultDb)
       .then((data) => {
         console.log(data);
         console.log(chalk.green('✓ Successfully retrieved all processed results'));

@@ -55,7 +55,7 @@ const dbQuery = require('./../utils/dbQuery');
  */
 
 exports.all = (req, res) => {
-  dbQuery.getAllWorkflow(req.body.base_db)
+  dbQuery.getAllWorkflow(req.body.baseDb)
     .then((data) => res.json({ count: data.length, workflows: data }))
     .catch((err) => res.json(err));
 }
@@ -89,8 +89,8 @@ exports.all = (req, res) => {
  */
 
 exports.generateHeader = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
   const workflowId = req.params.id;
 
   dbQuery.retrieveDoc(workflowId, dbUrl)
@@ -131,8 +131,8 @@ exports.generateHeader = (req, res) => {
  */
 
 exports.generateAll = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
 
   dbQuery.getAllWorkflow(dbUrl)
     .then(async(data) => {

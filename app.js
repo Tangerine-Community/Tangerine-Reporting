@@ -47,7 +47,7 @@ const tripController = require('./controllers/trip');
 app.get('/', (req, res) => res.send('index'));
 
 app.post('/download_csv', (req, res) => {
-  const resultDbUrl =  dbConfig.result_db;
+  const resultDbUrl =  dbConfig.resultDb;
   const resultId = req.body.workflowId;
   const resultYear = req.body.year;
   let resultMonth = req.body.month;
@@ -73,12 +73,12 @@ const dbQuery = require('./utils/dbQuery');
 const processChangedDocument = require('./controllers/changes').processChangedDocument;
 const generateCSV = require('./controllers/generate_csv').generateCSV;
 
-const BASE_DB = nano(dbConfig.base_db);
+const BASE_DB = nano(dbConfig.baseDb);
 const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 
 feed.on('change', (resp) => {
   feed.pause();
-  processChangedDocument(resp, dbConfig.base_db, dbConfig.result_db);
+  processChangedDocument(resp, dbConfig.baseDb, dbConfig.resultDb);
   setTimeout(function() { feed.resume() }, 500);
 });
 
@@ -92,7 +92,7 @@ feed.follow();
 app.get('/', (req, res) => res.render('index'));
 
 app.post('/download_csv', (req, res) => {
-  const resultDbUrl =  dbConfig.result_db;
+  const resultDbUrl =  dbConfig.resultDb;
   const resultId = req.body.workflowId;
   const resultYear = req.body.year;
   let resultMonth = req.body.month;

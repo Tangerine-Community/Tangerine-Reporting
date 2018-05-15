@@ -89,7 +89,7 @@ const surveyValueMap = {
  */
 
 exports.all = (req, res) => {
-  dbQuery.getAllResult(req.body.base_db)
+  dbQuery.getAllResult(req.body.baseDb)
     .then((data) => res.json(data))
     .catch((err) => res.json(err));
 }
@@ -126,8 +126,8 @@ exports.all = (req, res) => {
  */
 
 exports.processResult = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
   const docId = req.params.id;
 
   dbQuery.retrieveDoc(docId, dbUrl)

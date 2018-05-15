@@ -358,7 +358,7 @@ exports.saveUpdateSequence = (dbUrl, doc) => {
 };
 
 exports.processedResultsById = function (req, res) {
-  const RESULT_DB = nano(req.body.result_db);
+  const RESULT_DB = nano(req.body.resultDb);
   RESULT_DB.view('dashReporting', 'byParentId', {
     key: req.params.id,
     include_docs: true

@@ -18,7 +18,7 @@ const nano = require('nano');
  */
 
 const dbQuery = require('./../utils/dbQuery');
-const resultDB = require('./../config').result_db;
+const resultDB = require('./../config').resultDb;
 
 /**
  * Generates a CSV file.

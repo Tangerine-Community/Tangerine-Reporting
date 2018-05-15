@@ -47,8 +47,8 @@ const dbQuery = require('./../utils/dbQuery');
  */
 
 exports.processResult = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
   const tripId = req.params.id;
 
   dbQuery.getTripResults(tripId, dbUrl)

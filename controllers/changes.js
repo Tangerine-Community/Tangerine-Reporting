@@ -55,8 +55,8 @@ const validateResult = require('./result').validateResult;
  */
 
 exports.changes = async(req, res) => {
-  const dbUrl = req.body.base_db || dbConfig.base_db;
-  const resultDbUrl = req.body.result_db || dbConfig.result_db;
+  const dbUrl = req.body.baseDb || dbConfig.baseDb;
+  const resultDbUrl = req.body.resultDb || dbConfig.resultDb;
   const BASE_DB = nano(dbUrl);
   const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 
