@@ -202,53 +202,55 @@ const createColumnHeaders = function(doc, count = 0, dbUrl) {
           timestampCount: 0
         };
         for (data of subtestData) {
-          if (data.prototype === 'location') {
-            let location = createLocation(data, subtestCount);
-            assessments = assessments.concat(location);
-            subtestCount.locationCount++;
-            subtestCount.timestampCount++;
-          }
-          if (data.prototype === 'datetime') {
-            let datetime = createDatetime(data, subtestCount);
-            assessments = assessments.concat(datetime);
-            subtestCount.datetimeCount++;
-            subtestCount.timestampCount++;
-          }
-          if (data.prototype === 'consent') {
-            let consent = createConsent(data, subtestCount);
-            assessments = assessments.concat(consent);
-            subtestCount.consentCount++;
-            subtestCount.timestampCount++;
-          }
-          if (data.prototype === 'id') {
-            let id = createId(data, subtestCount);
-            assessments = assessments.concat(id);
-            subtestCount.idCount++;
-            subtestCount.timestampCount++;
-          }
-          if (data.prototype === 'survey') {
-            let surveys = await createSurvey(data._id, subtestCount, dbUrl);
-            assessments = assessments.concat(surveys);
-            subtestCount.surveyCount++;
-            subtestCount.timestampCount++;
-          }
-          if (data.prototype === 'grid') {
-            let grid = await createGrid(data, subtestCount);
-            assessments = assessments.concat(grid.gridHeader);
-            subtestCount.gridCount++;
-            subtestCount.timestampCount = grid.timestampCount;
-          }
-          if (data.prototype === 'gps') {
-            let gps = createGps(data, subtestCount);
-            assessments = assessments.concat(gps);
-            subtestCount.gpsCount++;
-            subtestCount.timestampCount++;
-          }
-          if (data.prototype === 'camera') {
-            let camera = createCamera(data, subtestCount);
-            assessments = assessments.concat(camera);
-            subtestCount.cameraCount++;
-            subtestCount.timestampCount++;
+          if (data !== null) {
+            if (data.prototype === 'location') {
+              let location = await createLocation(data, subtestCount, dbUrl);
+              assessments = assessments.concat(location);
+              subtestCount.locationCount++;
+              subtestCount.timestampCount++;
+            }
+            if (data.prototype === 'datetime') {
+              let datetime = createDatetime(data, subtestCount);
+              assessments = assessments.concat(datetime);
+              subtestCount.datetimeCount++;
+              subtestCount.timestampCount++;
+            }
+            if (data.prototype === 'consent') {
+              let consent = createConsent(data, subtestCount);
+              assessments = assessments.concat(consent);
+              subtestCount.consentCount++;
+              subtestCount.timestampCount++;
+            }
+            if (data.prototype === 'id') {
+              let id = createId(data, subtestCount);
+              assessments = assessments.concat(id);
+              subtestCount.idCount++;
+              subtestCount.timestampCount++;
+            }
+            if (data.prototype === 'survey') {
+              let surveys = await createSurvey(data._id, subtestCount, dbUrl);
+              assessments = assessments.concat(surveys);
+              subtestCount.surveyCount++;
+              subtestCount.timestampCount++;
+            }
+            if (data.prototype === 'grid') {
+              let grid = createGrid(data, subtestCount);
+              assessments = assessments.concat(grid.gridHeader);
+              subtestCount.gridCount++;
+              subtestCount.timestampCount = grid.timestampCount;
+            }
+            if (data.prototype === 'gps') {
+              let gps = createGps(data, subtestCount);
+              assessments = assessments.concat(gps);
+              subtestCount.gpsCount++;
+              subtestCount.timestampCount++;
+            }
+            if (data.prototype === 'camera') {
+              let camera = createCamera(data, subtestCount);
+              assessments = assessments.concat(camera);
+              subtestCount.cameraCount++;
+              subtestCount.timestampCount++;
+            }
           }
         }
         resolve(assessments);
@@ -269,27 +271,35 @@ const createColumnHeaders = function(doc, count = 0, dbUrl) {
  *
  * @param {Object} doc - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} baseDb - base database.
  *
  * @returns {Array} - generated location headers.
  */
 
-function createLocation(doc, subtestCount) {
+async function createLocation(doc, subtestCount, baseDb) {
   let count = subtestCount.locationCount;
   let locSuffix = count > 0 ? `_${count}` : '';
   let i, locationHeader = [];
   let locLevels = doc.levels;
-  let isLocLevelSet = locLevels && locLevels.length != 0;
+  // check if the geographical level is available
+  let isLocLevelSet = (locLevels && locLevels.length > 0) && (locLevels && locLevels[0] !== '');
+
+  if (!isLocLevelSet) {
+    // check if the location-list level is available
+    let locationList = await dbQuery.getLocationList(baseDb);
+    locLevels = locationList.locationsLevels;
+    isLocLevelSet = (locLevels && locLevels.length > 0) && (locLevels && locLevels[0] !== '');
+  }
 
   if (isLocLevelSet) {
     for (i = 0; i < locLevels.length; i++) {
-      if (locLevels[i] != '') {
-        locationHeader.push({
-          header: `${locLevels[i]}`,
-          key: `${doc._id}.${locLevels[i]}`
-        });
-      }
+      locationHeader.push({
+        header: `${locLevels[i]}${locSuffix}`,
+        key: `${doc._id}.${locLevels[i]}${locSuffix}`
+      });
     }
   }
+
   locationHeader.push({
     header: `timestamp_${subtestCount.timestampCount}`,
     key: `${doc._id}.timestamp_${subtestCount.timestampCount}`
@@ -408,7 +418,7 @@ async function createSurvey(id, subtestCount, dbUrl) {
  * @returns {Array} - generated grid headers.
  */
 
-async function createGrid(doc, subtestCount) {
+function createGrid(doc, subtestCount) {
   let count = subtestCount.gridCount;
   let gridHeader = [];
   let gridData = [doc];
