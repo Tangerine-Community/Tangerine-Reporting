@@ -61,6 +61,50 @@ exports.all = (req, res) => {
 }
 
 /**
+ * Generates headers for ALL workflows in the database.
+ *
+ * Example:
+ *
+ *    POST /workflow/headers/all
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the generated headers will be saved.
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *       }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+
+exports.generateAll = (req, res) => {
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
+
+  dbQuery.getAllWorkflow(dbUrl)
+    .then(async(workflows) => {
+      for (item of workflows) {
+        let workflowId = item.id;
+        let generatedWorkflowHeaders = await createWorkflowHeaders(item.doc, dbUrl);
+        let saveResponse = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
+        console.log(saveResponse);
+      }
+      res.json(workflows);
+    })
+    .catch((err) => res.send(err));
+}
+
+/**
  * Generates headers for a workflow.
  *
  * Example:
@@ -94,56 +138,11 @@ exports.generateHeader = (req, res) => {
   const workflowId = req.params.id;
 
   dbQuery.retrieveDoc(workflowId, dbUrl)
-    .then(async(doc) => {
+    .then(async (doc) => {
       let colHeaders = await createWorkflowHeaders(doc, dbUrl);
       const saveResponse = await dbQuery.saveHeaders(colHeaders, workflowId, resultDbUrl);
       console.log(saveResponse);
       res.json(colHeaders);
-    })
-    .catch((err) => res.send(err));
-}
-
-/**
- * Generates headers for ALL workflows in the database.
- *
- * Example:
- *
- *    POST /workflow/headers/_all
- *
- *  The request object must contain the main database url and a
- *  result database url where the generated headers will be saved.
- *     {
- *       "db_url": "http://admin:password@test.tangerine.org/database_name"
- *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
- *     }
- *
- * Response:
- *
- *   Returns an Object indicating the data has been saved.
- *      {
- *        "ok": true,
- *        "id": "a1234567890",
- *        "rev": "1-b123"
- *       }
- *
- * @param req - HTTP request object
- * @param res - HTTP response object
- */
-
-exports.generateAll = (req, res) => {
-  const dbUrl = req.body.baseDb;
-  const resultDbUrl = req.body.resultDb;
-
-  dbQuery.getAllWorkflow(dbUrl)
-    .then(async(data) => {
-      let saveResponse;
-      for (item of data) {
-        let workflowId = item.id;
-        let generatedWorkflowHeaders = await createWorkflowHeaders(item.doc, dbUrl);
-        saveResponse = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
-        console.log(saveResponse);
-      }
-      res.json(saveResponse);
     })
     .catch((err) => res.send(err));
 }
@@ -189,8 +188,10 @@ const createWorkflowHeaders = async function(data, dbUrl) {
       workflowHeaders.push({ header: `message${messageSuffix}`, key: `${data._id}.message${messageSuffix}` });
       messageCount++;
     }
+
     workflowItems.push(item);
   }
+
   workflowHeaders = flatten(workflowHeaders);
 
   return workflowHeaders;
