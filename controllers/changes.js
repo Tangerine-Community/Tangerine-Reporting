@@ -117,7 +117,7 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const isQuestion = (collectionType === 'question') ? true : false;
   const isSubtest = (collectionType === 'subtest') ? true : false;
 
-  console.info(`\n::: Processing ${resp.doc.collection} document on sequence ${resp.seq} :::\n`);
+  console.info(`\n::: Processing document on sequence ${resp.seq} :::\n`);
 
   if (isWorkflowIdSet && isResult) {
     console.info('\n<<<=== START PROCESSING WORKFLOW RESULT ===>>>\n');
@@ -176,13 +176,13 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
 
   if (isAssessment || isCurriculum || isQuestion || isSubtest) {
     try {
-      console.info('\n<<<=== START PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>\n');
+      console.info(`\n<<<=== START PROCESSING ${resp.doc.collection.toUpperCase()} COLLECTION  ===>>>\n`);
       let assessmentDoc = await dbQuery.retrieveDoc(assessmentId, dbUrl);
       const assessmentHeaders = await generateAssessmentHeaders(resp.doc, 0, dbUrl);
       assessmentHeaders.unshift(assessmentDoc.name); // Add assessment name. Needed for csv file name.
       const saveResponse = await dbQuery.saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
       console.log(saveResponse);
-      console.info('\n<<<=== END PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION ===>>>\n');
+      console.info(`\n<<<=== END PROCESSING ${resp.doc.collection.toUpperCase()} COLLECTION ===>>>\n`);
     } catch (err) {
       console.error(err);
     }
