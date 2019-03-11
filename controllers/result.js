@@ -89,7 +89,7 @@ const surveyValueMap = {
  */
 
 exports.all = (req, res) => {
-  dbQuery.getAllResult(req.body.base_db)
+  dbQuery.getAllResult(req.body.baseDb)
     .then((data) => res.json(data))
     .catch((err) => res.json(err));
 }
@@ -126,8 +126,8 @@ exports.all = (req, res) => {
  */
 
 exports.processResult = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
   const docId = req.params.id;
 
   dbQuery.retrieveDoc(docId, dbUrl)
@@ -181,7 +181,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
   let assessmentSuffix = count > 0 ? `_${count}` : '';
   let resultCollections = _.isArray(collections) ? collections : [collections];
   let dbSettings = await dbQuery.getSettings(dbUrl);
-  let groupTimeZone = dbSettings.timeZone;
+  let groupTimeZone = dbSettings.timeZone || 0;
 
   for (let [index, data] of resultCollections.entries()) {
     collection = data.doc;
@@ -261,7 +261,7 @@ const generateResult = async function(collections, count = 0, dbUrl) {
         }
         if (doc.prototype === 'complete') {
           let endTimestamp = convertToTimeZone(doc.data.end_time, groupTimeZone);
-          result[`${collectionId}.end_time${assessmentSuffix}`] = moment(endTimestamp).format('hh:mm');
+          result[`${collectionId}.end_time${assessmentSuffix}`] = moment(endTimestamp).format('MMM D YYYY hh:mm');
         }
       }
     }
@@ -276,11 +276,15 @@ const generateResult = async function(collections, count = 0, dbUrl) {
 
     // Include user metadata
     let username = `user-${enumeratorName}`;
-    let userDetails = await dbQuery.getUserDetails(username, dbUrl);
-    result[`${collectionId}.userRole`] = userDetails.role;
-    result[`${collectionId}.mPesaNumber`] = userDetails.mPesaNumber;
-    result[`${collectionId}.phoneNumber`] = userDetails.phoneNumber || userDetails.phone;
-    result[`${collectionId}.fullName`] = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
+    try {
+      let userDetails = await dbQuery.getUserDetails(username, dbUrl);
+      result[`${collectionId}.userRole`] = userDetails.role;
+      result[`${collectionId}.mPesaNumber`] = userDetails.mPesaNumber;
+      result[`${collectionId}.phoneNumber`] = userDetails.phoneNumber || userDetails.phone;
+      result[`${collectionId}.fullName`] = `${userDetails.firstName || userDetails.first} ${userDetails.lastName || userDetails.last}`;
+    } catch (err) {
+      console.error({ message: 'Could not find user metadata', reason: err.message });
+    }
   }
 
   return result;
@@ -297,23 +301,39 @@ const generateResult = async function(collections, count = 0, dbUrl) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
+ * @param {string} dbUrl - base database url.
  *
  * @returns {Object} processed location data.
  */
 
 async function processLocationResult(body, subtestCount, groupTimeZone, dbUrl) {
   let count = subtestCount.locationCount;
-  let i, locationResult = {};
+  let i, j, locationResult = {};
   let locSuffix = count > 0 ? `_${count}` : '';
   let subtestId = body.subtestId;
-  let locationNames = await getLocationName(body, dbUrl);
+  let locLabels = body.data.labels;
+  let locationData = body.data.location;
+  let schoolId = body.data.schoolId;
   let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
 
-  locationResult[`${subtestId}.county${locSuffix}`] = locationNames.county.label.replace(/\s/g,'-');
-  locationResult[`${subtestId}.subcounty${locSuffix}`] = locationNames.subcounty.label.replace(/\s/g,'-');
-  locationResult[`${subtestId}.zone${locSuffix}`] = locationNames.zone.label.replace(/\s/g,'-');
-  locationResult[`${subtestId}.school${locSuffix}`] = locationNames.school.label.replace(/\s/g,'-');
-  locationResult[`${subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  if (schoolId || locLabels.length == 0 || locLabels[0] == '') {
+    let locationNames = await getLocationName(body, dbUrl);
+    let locKeys = Object.keys(locationNames);
+    if (locKeys.length > 0) {
+      for (j = 0; j < locKeys.length; j++) {
+        let key = locKeys[j];
+        let location = locationNames[key] ? locationNames[key].label : locationNames[key];
+        locationResult[`${subtestId}.${locKeys[j]}${locSuffix}`] = location ? location.replace(/\s/g, '-') : location;
+      }
+    }
+  }
+  else {
+    for (i = 0; i < locLabels.length; i++) {
+      locationResult[`${subtestId}.${locLabels[i]}`] = locationData[i];
+    }
+  }
+  locationResult[`${subtestId}.timestamp_${subtestCount.locationCount}`] = moment(timestamp).format('MMM D YYYY hh:mm');
 
   return locationResult;
 }
@@ -336,9 +356,10 @@ async function getLocationName(body, dbUrl) {
   // retrieve location-list from the base database.
   let locationList = await dbQuery.getLocationList(dbUrl);
   let levels = locationList.locationsLevels;
+  let locLabels = body.data.labels.map(label => label.toLowerCase());
+  let isLocationListSet = _.isEmpty(locationList.locations);
 
   if (schoolId) {
-    let locLabels = body.data.labels.map(loc => loc.toLowerCase());
     for (j = 0; j < levels.length; j++) {
       locNames[levels[j]] = {};
       let level = levels[j] === 'school' ? 'schoolname' : levels[j];
@@ -350,40 +371,45 @@ async function getLocationName(body, dbUrl) {
     locIds = body.data.location;
   }
 
-  for (i = 0; i < levels.length; i++) {
-    locNames[levels[i]] = _.get(locationList.locations, locIds[i]);
+  //Note: this location details can process up to 4 levels and not more.
+  //@TODO: Update it to accommodate more than 4 levels.
+  if (!isLocationListSet) {
+    for (i = 0; i < levels.length; i++) {
+      locNames[levels[i]] = _.get(locationList.locations, locIds[i]);
 
-    if (locNames[levels[i]]) {
-      locNames[levels[i+1]] = _.get(locNames[levels[i]].children, locIds[i+1]);
+      if (locNames[levels[i]]) {
+        locNames[levels[i + 1]] = _.get(locNames[levels[i]].children, locIds[i + 1]);
 
-      if (!locNames[levels[i+1]]) {
-        for (const [key, val] of Object.entries(locNames[levels[i]].children)) {
-          locNames[levels[i+2]] =  _.get(val.children, locIds[i+1]);
+        if (!locNames[levels[i + 1]]) {
+          for (const [key, val] of Object.entries(locNames[levels[i]].children)) {
+            locNames[levels[i + 2]] = _.get(val.children, locIds[i + 1]);
 
-          if (locNames[levels[i+2]]) {
-            locNames[levels[i+1]] = val;
-            locNames[levels[i+3]] = _.get(locNames[levels[i+2]].children, locIds[i+2]);
-            break;
-          } else {
+            if (locNames[levels[i + 2]]) {
+              locNames[levels[i + 1]] = val;
+              locNames[levels[i + 3]] = _.get(locNames[levels[i + 2]].children, locIds[i + 2]);
+              break;
+            } else {
 
-            for (const [prop, value] of Object.entries(locNames[levels[i]].children)) {
-              locNames[levels[i+3]] = _.get(value.children, locIds[i+1]);
+              for (const [prop, value] of Object.entries(locNames[levels[i]].children)) {
+                locNames[levels[i + 3]] = _.get(value.children, locIds[i + 1]);
 
-              if (locNames[levels[i+3]]) {
-                locNames[levels[i+2]] = value;
-                locNames[levels[i+1]] = val;
-                break;
+                if (locNames[levels[i + 3]]) {
+                  locNames[levels[i + 2]] = value;
+                  locNames[levels[i + 1]] = val;
+                  break;
+                }
               }
             }
           }
+        } else {
+          locNames[levels[i + 2]] = _.get(locNames[levels[i + 1]].children, locIds[i + 2]);
+
+          if (locNames[levels[i + 2]]) {
+            locNames[levels[i + 3]] = _.get(locNames[levels[i + 2]].children, locIds[i + 3]);
+          }
         }
-      } else {
-        locNames[levels[i+2]] = _.get(locNames[levels[i+1]].children, locIds[i+2]);
-        if (locNames[levels[i+2]]) {
-          locNames[levels[i+3]] = _.get(locNames[levels[i+2]].children, locIds[i+3]);
-        }
+        break;
       }
-      break;
     }
   }
 
@@ -395,6 +421,7 @@ async function getLocationName(body, dbUrl) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed datetime data.
  */
@@ -408,7 +435,7 @@ function processDatetimeResult(body, subtestCount, groupTimeZone) {
     [`${body.subtestId}.month${suffix}`]: body.data.month,
     [`${body.subtestId}.day${suffix}`]: body.data.day,
     [`${body.subtestId}.assess_time${suffix}`]: body.data.time,
-    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: moment(timestamp).format('hh:mm')
+    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: moment(timestamp).format('MMM D YYYY hh:mm')
   }
   return datetimeResult;
 }
@@ -418,6 +445,7 @@ function processDatetimeResult(body, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed consent data.
  */
@@ -428,7 +456,7 @@ function processConsentResult(body, subtestCount, groupTimeZone) {
 
   consentResult = {
     [`${body.subtestId}.consent${suffix}`]: body.data.consent,
-    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: moment(timestamp).format('hh:mm')
+    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: moment(timestamp).format('MMM D YYYY hh:mm')
   };
   return consentResult;
 }
@@ -438,6 +466,7 @@ function processConsentResult(body, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed id data.
  */
@@ -448,7 +477,7 @@ function processIDResult(body, subtestCount, groupTimeZone) {
 
   idResult = {
     [`${body.subtestId}.id${suffix}`]: body.data.participant_id,
-    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: moment(timestamp).format('hh:mm')
+    [`${body.subtestId}.timestamp_${subtestCount.timestampCount}`]: moment(timestamp).format('MMM D YYYY hh:mm')
   };
   return idResult;
 }
@@ -458,6 +487,7 @@ function processIDResult(body, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed survey data.
  */
@@ -466,21 +496,19 @@ function processSurveyResult(body, subtestCount, groupTimeZone) {
   let count = subtestCount.surveyCount;
   let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
   let surveyResult = {};
-  let response = [];
 
   for (doc in body.data) {
     if (typeof body.data[doc] === 'object') {
       for (item in body.data[doc]) {
         let surveyValue = translateSurveyValue(body.data[doc][item]);
-        response.push(surveyValue);
-        surveyResult[`${body.subtestId}.${doc}`] = response.join(',');
+        surveyResult[`${body.subtestId}.${doc}_${item}`] = surveyValue;
       }
     } else {
       let value = translateSurveyValue(body.data[doc]);
       surveyResult[`${body.subtestId}.${doc}`] = value;
     }
   }
-  surveyResult[`${body.subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  surveyResult[`${body.subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('MMM D YYYY hh:mm');
 
   return surveyResult;
 }
@@ -490,6 +518,8 @@ function processSurveyResult(body, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
+ * @param {number} assessmentSuffix - assessment count.
  *
  * @returns {Object} processed grid data.
  */
@@ -510,15 +540,15 @@ function processGridResult(body, subtestCount, groupTimeZone, assessmentSuffix) 
   gridResult[`${subtestId}.${varName}_time_intermediate_captured${suffix}`] = body.data.time_intermediate_captured;
   gridResult[`${subtestId}.${varName}_time_allowed${suffix}`] = body.data.time_allowed;
 
-  for (doc of body.data.items) {
+  for (let [index, doc] of body.data.items.entries()) {
     let gridValue = doc.itemResult === 'correct' ? translateGridValue(doc.itemResult) : 0;
-    gridResult[`${subtestId}.${varName}_${doc.itemLabel}`] = gridValue;
+    gridResult[`${subtestId}.${varName}_${index + 1}`] = gridValue;
     correctSum += +gridValue;
   }
 
   let fluencyRate = Math.round(correctSum / (1 - body.data.time_remain / body.data.time_allowed));
   gridResult[`${subtestId}.fluency_rate${assessmentSuffix}`] = fluencyRate;
-  gridResult[`${subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  gridResult[`${subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('MMM D YYYY hh:mm');
 
   return gridResult;
 }
@@ -528,6 +558,7 @@ function processGridResult(body, subtestCount, groupTimeZone, assessmentSuffix) 
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed gps data.
  */
@@ -544,7 +575,7 @@ function processGpsResult(doc, subtestCount, groupTimeZone) {
   gpsResult[`${doc.subtestId}.altitudeAccuracy${suffix}`] = doc.data.altAcc;
   gpsResult[`${doc.subtestId}.heading${suffix}`] = doc.data.heading;
   gpsResult[`${doc.subtestId}.speed${suffix}`] = doc.data.speed;
-  gpsResult[`${doc.subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  gpsResult[`${doc.subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('MMM D YYYY hh:mm');
 
   return gpsResult;
 }
@@ -554,19 +585,20 @@ function processGpsResult(doc, subtestCount, groupTimeZone) {
  *
  * @param {Object} body - document to be processed.
  * @param {Object} subtestCount - count.
+ * @param {string} groupTimeZone - time zone from db settings.
  *
  * @returns {Object} processed camera data.
  */
 
 function processCamera(body, subtestCount, groupTimeZone) {
   let cameraResult = {};
-  let varName = body.data.variableName;
+  let varName = body.data.variableName || body.name;
   let suffix = subtestCount.cameraCount > 0 ? `_${subtestCount.cameraCount}` : '';
   let timestamp = convertToTimeZone(body.timestamp, groupTimeZone);
 
   cameraResult[`${body.subtestId}.${varName}_photo_captured${suffix}`] = body.data.imageBase64;
   cameraResult[`${body.subtestId}.${varName}_photo_url${suffix}`] = body.data.imageBase64;
-  cameraResult[`${body.subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('hh:mm');
+  cameraResult[`${body.subtestId}.timestamp_${subtestCount.timestampCount}`] = moment(timestamp).format('MMM D YYYY hh:mm');
 
   return cameraResult;
 }

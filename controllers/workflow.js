@@ -7,8 +7,8 @@
  * Module dependencies
  */
 
-const _ = require('lodash');
-const nano = require('nano');
+const filter = require('lodash').filter;
+const flatten = require('lodash').flatten;
 
 /**
  * Local modules
@@ -55,9 +55,53 @@ const dbQuery = require('./../utils/dbQuery');
  */
 
 exports.all = (req, res) => {
-  dbQuery.getAllWorkflow(req.body.base_db)
+  dbQuery.getAllWorkflow(req.body.baseDb)
     .then((data) => res.json({ count: data.length, workflows: data }))
     .catch((err) => res.json(err));
+}
+
+/**
+ * Generates headers for ALL workflows in the database.
+ *
+ * Example:
+ *
+ *    POST /workflow/headers/all
+ *
+ *  The request object must contain the main database url and a
+ *  result database url where the generated headers will be saved.
+ *     {
+ *       "db_url": "http://admin:password@test.tangerine.org/database_name"
+ *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
+ *     }
+ *
+ * Response:
+ *
+ *   Returns an Object indicating the data has been saved.
+ *      {
+ *        "ok": true,
+ *        "id": "a1234567890",
+ *        "rev": "1-b123"
+ *       }
+ *
+ * @param req - HTTP request object
+ * @param res - HTTP response object
+ */
+
+exports.generateAll = (req, res) => {
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
+
+  dbQuery.getAllWorkflow(dbUrl)
+    .then(async(workflows) => {
+      for (item of workflows) {
+        let workflowId = item.id;
+        let generatedWorkflowHeaders = await createWorkflowHeaders(item.doc, dbUrl);
+        let saveResponse = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
+        console.log(saveResponse);
+      }
+      res.json(workflows);
+    })
+    .catch((err) => res.send(err));
 }
 
 /**
@@ -89,61 +133,16 @@ exports.all = (req, res) => {
  */
 
 exports.generateHeader = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
   const workflowId = req.params.id;
 
   dbQuery.retrieveDoc(workflowId, dbUrl)
-    .then(async(doc) => {
+    .then(async (doc) => {
       let colHeaders = await createWorkflowHeaders(doc, dbUrl);
       const saveResponse = await dbQuery.saveHeaders(colHeaders, workflowId, resultDbUrl);
       console.log(saveResponse);
       res.json(colHeaders);
-    })
-    .catch((err) => res.send(err));
-}
-
-/**
- * Generates headers for ALL workflows in the database.
- *
- * Example:
- *
- *    POST /workflow/headers/_all
- *
- *  The request object must contain the main database url and a
- *  result database url where the generated headers will be saved.
- *     {
- *       "db_url": "http://admin:password@test.tangerine.org/database_name"
- *       "another_db_url": "http://admin:password@test.tangerine.org/result_database_name"
- *     }
- *
- * Response:
- *
- *   Returns an Object indicating the data has been saved.
- *      {
- *        "ok": true,
- *        "id": "a1234567890",
- *        "rev": "1-b123"
- *       }
- *
- * @param req - HTTP request object
- * @param res - HTTP response object
- */
-
-exports.generateAll = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
-
-  dbQuery.getAllWorkflow(dbUrl)
-    .then(async(data) => {
-      let saveResponse;
-      for (item of data) {
-        let workflowId = item.id;
-        let generatedWorkflowHeaders = await createWorkflowHeaders(item.doc, dbUrl);
-        saveResponse = await dbQuery.saveHeaders(generatedWorkflowHeaders, workflowId, resultDbUrl);
-        console.log(saveResponse);
-      }
-      res.json(saveResponse);
     })
     .catch((err) => res.send(err));
 }
@@ -170,8 +169,10 @@ const createWorkflowHeaders = async function(data, dbUrl) {
   let messageCount = 0;
   let count = 0;
 
+  workflowHeaders.push(data.name);  // Add Workflow name. Needed for csv file name
+
   for (item of data.children) {
-    let isProcessed = _.filter(workflowItems, {typesId: item.typesId});
+    let isProcessed = filter(workflowItems, {typesId: item.typesId});
     item.workflowId = data._id;
     // this part is needed to avoid processing duplicates.
     let isCurriculumProcessed = item.type === 'curriculum' & !isProcessed.length;
@@ -187,9 +188,11 @@ const createWorkflowHeaders = async function(data, dbUrl) {
       workflowHeaders.push({ header: `message${messageSuffix}`, key: `${data._id}.message${messageSuffix}` });
       messageCount++;
     }
+
     workflowItems.push(item);
   }
-  workflowHeaders = _.flatten(workflowHeaders);
+
+  workflowHeaders = flatten(workflowHeaders);
 
   return workflowHeaders;
 }

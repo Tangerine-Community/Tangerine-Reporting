@@ -8,7 +8,8 @@
  * Module Dependencies.
  */
 
-const _ = require('lodash');
+
+const sortBy = require('lodash').sortBy;
 const nano = require('nano');
 
 /**
@@ -54,23 +55,57 @@ const validateResult = require('./result').validateResult;
  */
 
 exports.changes = async(req, res) => {
-  const dbUrl = req.body.base_db || dbConfig.base_db;
-  const resultDbUrl = req.body.result_db || dbConfig.result_db;
+  const dbUrl = req.body.baseDb || dbConfig.baseDb;
+  const resultDbUrl = req.body.resultDb || dbConfig.resultDb;
   const BASE_DB = nano(dbUrl);
   const feed = BASE_DB.follow({ since: 'now', include_docs: true });
 
-  feed.on('change', async(resp) => {
+  feed.on('change', (body) => {
     feed.pause();
-    processChangedDocument(resp, dbUrl, resultDbUrl);
-    setTimeout(function() { feed.resume() }, 500);
+    queueProcessChangedDocument({ body, dbUrl, resultDbUrl });
+    setTimeout(function() { feed.resume() }, 200);
   });
 
   feed.on('error', (err) => res.send(err));
   feed.follow();
 }
 
+var queue = [];
+var isProcessing = false;
+const queueProcessChangedDocument = async function(job) {
+  queue.push(job);
+};
+
+var sleep = delay => {
+  return new Promise(res => {
+    setTimeout(res, delay);
+  });
+};
+
+let startQueue = async () => {
+  while (true) {
+    await sleep(200);
+    if (queue.length > 0) {
+      let job = queue.shift();
+      await processChangedDocument(job.body, job.dbUrl, job.resultDbUrl);
+    }
+  }
+};
+
+startQueue();
+
+/** @description This function processess a document based on the
+ * collection type i.e. result, assessment, workflow, subtest, question
+ * and curriculum. This is usually called when a change happens in the base
+ * database and it is processed and saved in the result database.
+ *
+ * @param {Object} resp - changed document
+ * @param {string} dbUrl - base database url
+ * @param {string} resultDbUrl - result database url
+ */
+
 const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
-  const assessmentId = resp.doc.assessmentId;
+  const assessmentId = resp.doc.assessmentId || resp.doc._id;
   const workflowId = resp.doc.workflowId;
   const collectionType = resp.doc.collection;
 
@@ -82,59 +117,75 @@ const processChangedDocument = async(resp, dbUrl, resultDbUrl) => {
   const isQuestion = (collectionType === 'question') ? true : false;
   const isSubtest = (collectionType === 'subtest') ? true : false;
 
-  console.info(`\n::: Processing ${collectionType} document on sequence ${resp.seq} :::\n`);
+  console.info(`\n::: Processing document on sequence ${resp.seq} :::\n`);
 
   if (isWorkflowIdSet && isResult) {
     console.info('\n<<<=== START PROCESSING WORKFLOW RESULT ===>>>\n');
-    dbQuery.getResults(resp.doc.tripId, dbUrl)
-      .then(async(data) => {
-        const workflowResult = await processWorkflowResult(data, dbUrl);
-        const saveResponse = await dbQuery.saveResult(workflowResult, resultDbUrl);
-        console.log(saveResponse);
-        console.info('\n<<<=== END PROCESSING WORKFLOW RESULT ===>>>\n');
-      })
-      .catch((err) => console.error(err));
+    try {
+      let data = await dbQuery.getTripResults(resp.doc.tripId, dbUrl);
+      const workflowResult = await processWorkflowResult(data, dbUrl);
+      const saveResponse = await dbQuery.saveResult(workflowResult, resultDbUrl);
+      console.log(saveResponse);
+      console.info('\n<<<=== END PROCESSING WORKFLOW RESULT ===>>>\n');
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   if (!isWorkflowIdSet && isResult) {
-    console.info('\n<<<=== START PROCESSING ASSESSMENT RESULT  ===>>>\n');
-    let assessmentResult = await processAssessmentResult([resp], 0, dbUrl);
-    let docId = assessmentResult.indexKeys.collectionId;
-    let groupTimeZone = assessmentResult.indexKeys.groupTimeZone;
-    let allTimestamps = _.sortBy(assessmentResult.indexKeys.timestamps);
+    try {
+      console.info('\n<<<=== START PROCESSING ASSESSMENT RESULT  ===>>>\n');
+      let assessmentResult = await processAssessmentResult([resp], 0, dbUrl);
+      let docId = assessmentResult.indexKeys.collectionId;
+      let groupTimeZone = assessmentResult.indexKeys.groupTimeZone;
+      let allTimestamps = sortBy(assessmentResult.indexKeys.timestamps);
 
-    // Validate result from all subtest timestamps
-    let validationData = await validateResult(docId, groupTimeZone, dbUrl, allTimestamps);
-    assessmentResult.isValid = validationData.isValid;
-    assessmentResult.isValidReason = validationData.reason;
-    assessmentResult[`${docId}.start_time`] = validationData.startTime;
-    assessmentResult[`${docId}.end_time`] = validationData.endTime;
+      // Validate result from all subtest timestamps
+      let validationData = await validateResult(docId, groupTimeZone, dbUrl, allTimestamps);
+      assessmentResult.isValid = validationData.isValid;
+      assessmentResult.isValidReason = validationData.reason;
+      assessmentResult[`${docId}.start_time`] = validationData.startTime;
+      assessmentResult[`${docId}.end_time`] = validationData.endTime;
 
-    assessmentResult.indexKeys.ref = assessmentResult.indexKeys.ref;
-    assessmentResult.indexKeys.parent_id = docId;
-    assessmentResult.indexKeys.year = validationData.indexKeys.year;
-    assessmentResult.indexKeys.month = validationData.indexKeys.month;
-    assessmentResult.indexKeys.day = validationData.indexKeys.day;
+      assessmentResult.indexKeys.ref = assessmentResult.indexKeys.ref;
+      assessmentResult.indexKeys.parent_id = docId;
+      assessmentResult.indexKeys.year = validationData.indexKeys.year;
+      assessmentResult.indexKeys.month = validationData.indexKeys.month;
+      assessmentResult.indexKeys.day = validationData.indexKeys.day;
 
-    const saveResponse = await dbQuery.saveResult(assessmentResult, resultDbUrl);
-    console.log(saveResponse);
-    console.info('\n<<<=== END PROCESSING ASSESSMENT RESULT ===>>>\n');
+      const saveResponse = await dbQuery.saveResult(assessmentResult, resultDbUrl);
+      console.log(saveResponse);
+      console.info('\n<<<=== END PROCESSING ASSESSMENT RESULT ===>>>\n');
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   if (isWorkflow) {
-    console.info('\n<<<=== START PROCESSING WORKFLOW COLLECTION  ===>>>\n');
-    const workflowHeaders = await generateWorkflowHeaders(resp.doc, dbUrl);
-    const saveResponse = await dbQuery.saveHeaders(workflowHeaders, workflowId, resultDbUrl);
-    console.log(saveResponse);
-    console.info('\n<<<=== END PROCESSING WORKFLOW COLLECTION ===>>>\n');
+    try {
+      console.info('\n<<<=== START PROCESSING WORKFLOW COLLECTION  ===>>>\n');
+      const docId = workflowId || resp.doc._id;
+      const workflowHeaders = await generateWorkflowHeaders(resp.doc, dbUrl);
+      const saveResponse = await dbQuery.saveHeaders(workflowHeaders, docId, resultDbUrl);
+      console.log(saveResponse);
+      console.info('\n<<<=== END PROCESSING WORKFLOW COLLECTION ===>>>\n');
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   if (isAssessment || isCurriculum || isQuestion || isSubtest) {
-    console.info('\n<<<=== START PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION  ===>>>\n');
-    const assessmentHeaders = await generateAssessmentHeaders(resp.doc, 0, dbUrl);
-    const saveResponse = await dbQuery.saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
-    console.log(saveResponse);
-    console.info('\n<<<=== END PROCESSING ASSESSMENT or CURRICULUM or SUBTEST or QUESTION COLLECTION ===>>>\n');
+    try {
+      console.info(`\n<<<=== START PROCESSING ${resp.doc.collection.toUpperCase()} COLLECTION  ===>>>\n`);
+      let assessmentDoc = await dbQuery.retrieveDoc(assessmentId, dbUrl);
+      const assessmentHeaders = await generateAssessmentHeaders(resp.doc, 0, dbUrl);
+      assessmentHeaders.unshift(assessmentDoc.name); // Add assessment name. Needed for csv file name.
+      const saveResponse = await dbQuery.saveHeaders(assessmentHeaders, assessmentId, resultDbUrl);
+      console.log(saveResponse);
+      console.info(`\n<<<=== END PROCESSING ${resp.doc.collection.toUpperCase()} COLLECTION ===>>>\n`);
+    } catch (err) {
+      console.error(err);
+    }
   }
 
 }

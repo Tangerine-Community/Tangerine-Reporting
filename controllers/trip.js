@@ -8,9 +8,7 @@
  */
 
 const nano = require('nano');
-const _ = require('lodash');
-const moment = require('moment');
-moment().format();
+const chain = require('lodash').chain;
 
 /**
  * Local dependencies.
@@ -49,11 +47,11 @@ const dbQuery = require('./../utils/dbQuery');
  */
 
 exports.processResult = (req, res) => {
-  const dbUrl = req.body.base_db;
-  const resultDbUrl = req.body.result_db;
+  const dbUrl = req.body.baseDb;
+  const resultDbUrl = req.body.resultDb;
   const tripId = req.params.id;
 
-  dbQuery.getResults(tripId, dbUrl)
+  dbQuery.getTripResults(tripId, dbUrl)
     .then(async(data) => {
       const totalResult = await processWorkflowResult(data, dbUrl);
       const saveResponse = await dbQuery.saveResult(totalResult, resultDbUrl);
@@ -94,7 +92,7 @@ const processWorkflowResult = function (data, dbUrl) {
     let docId = body[0].indexKeys.collectionId;
     let groupTimeZone = body[0].indexKeys.groupTimeZone;
 
-    let allTimestamps = _.chain(body)
+    let allTimestamps = chain(body)
       .map(el => el && el.indexKeys.timestamps)
       .filter(val => val != null || undefined)
       .flatten()

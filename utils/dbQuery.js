@@ -146,12 +146,18 @@ exports.saveHeaders = (doc, key, dbUrl) => {
   const RESULT_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     RESULT_DB.get(key, (error, existingDoc) => {
-      let docObj = { column_headers: doc };
-      docObj.updated_at = new Date().toISOString();
+      let docObj = {
+        name: doc.shift(),
+        updated_at: new Date().toISOString(),
+        column_headers: doc
+      };
 
       // if doc exists update it using its revision number.
       if (!error) {
-        docObj = _.assignIn(existingDoc, docObj);
+        let joinByHeader = _.unionBy(existingDoc.column_headers, docObj.column_headers, 'header');
+        let joinBykey = _.unionBy(existingDoc.column_headers, docObj.column_headers, 'key');
+        docObj.column_headers = _.union(joinByHeader, joinBykey);
+        docObj._rev = existingDoc._rev;
       }
       RESULT_DB.insert(docObj, key, (err, body) => {
         if (err) {
@@ -169,7 +175,6 @@ exports.saveHeaders = (doc, key, dbUrl) => {
  * This function saves/updates processed result in the result database.
  *
  * @param {Object} doc - document to be saved.
- * @param {string} key - key for indexing.
  * @param {string} dbUrl - url of the result database.
  *
  * @returns {Object} - saved document.
@@ -195,7 +200,7 @@ exports.saveResult = (doc, dbUrl) => {
     RESULT_DB.get(docKey, (error, existingDoc) => {
       // if doc exists update it using its revision number.
       if (!error) {
-        docObj = _.assignIn(existingDoc, docObj);
+        docObj = _.merge(existingDoc, docObj);
       }
       RESULT_DB.insert(docObj, docKey, (err, body) => {
         if (err) {
@@ -302,7 +307,7 @@ exports.getProcessedResults = function (ref, dbUrl) {
  * @returns {Array} - result documents.
  */
 
-exports.getResults = function(id, dbUrl) {
+exports.getTripResults = function(id, dbUrl) {
   const BASE_DB = nano(dbUrl);
   return new Promise((resolve, reject) => {
     BASE_DB.view('dashReporting', 'byTripId', {
@@ -316,54 +321,6 @@ exports.getResults = function(id, dbUrl) {
         resolve(body.rows);
       }
     });
-  });
-}
-
-exports.checkUpdateSequence = (dbUrl) => {
-  const DB = nano(dbUrl);
-  return new Promise((resolve, reject) => {
-    DB.get('last_update_sequence', (err, obj) => {
-      if (err) {
-        reject(err);
-      }
-      else {
-        resolve(obj);
-      }
-    });
-  });
-};
-
-exports.saveUpdateSequence = (dbUrl, doc) => {
-  const DB = nano(dbUrl)
-  return new Promise((resolve, reject) => {
-    DB.get(doc.key, (error, seqDoc) => {
-      if (!error) {
-        doc._rev = seqDoc._rev;
-      }
-      DB.insert(doc, doc.key, (err, body) => {
-        if (err) {
-          reject(err);
-        }
-        else {
-          resolve(body);
-        }
-      });
-    });
-  });
-};
-
-exports.processedResultsById = function (req, res) {
-  const RESULT_DB = nano(req.body.result_db);
-  RESULT_DB.view('dashReporting', 'byParentId', {
-    key: req.params.id,
-    include_docs: true
-  }, (err, body) => {
-    if (err) {
-      res.send(err);
-    }
-    else {
-      res.json(body.rows);
-    }
   });
 }
 
@@ -412,7 +369,6 @@ exports.getLocationList = function (dbUrl) {
     });
   });
 }
-
 
 exports.getSettings = function (dbUrl) {
   const BASE_DB = nano(dbUrl);
